@@ -1,5 +1,6 @@
-
 import sys
+import os, os.path
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QComboBox, QDialog,
         QDialogButtonBox, QFormLayout, QGridLayout, QGroupBox, QHBoxLayout, QFrame,
@@ -10,12 +11,35 @@ from PyQt5.QtCore import QDir, pyqtSignal, QFile
 from PyQt5 import QtCore
 from PyQt5 import QtGui
 
+from whoosh.index import create_in
+from whoosh.fields import *
+from whoosh.filedb.filestore import FileStorage
+from whoosh.qparser import QueryParser
+
 class MainWidget(QFrame): #QDialog #QMainWindow
     msg = pyqtSignal(str)
     # import QSciScintilla
 
     def __init__(self, parent):
         super().__init__(parent)
+
+        # create index
+        schema = Schema(title=TEXT(stored=True), path=STORED, content=TEXT(stored=True), tags=KEYWORD)
+        if not os.path.exists("indexdir"):
+            os.mkdir("indexdir")
+        self.ix = create_in("indexdir", schema)
+        self.writer = self.ix.writer()
+
+        self.source_files = QDir("data").entryList(QDir.Files)
+        for filename in self.source_files:
+            file = QFile("data/{}".format(filename))
+            if not file.open(QtCore.QIODevice.ReadOnly):
+                print("couldn't open file")
+            stream = QtCore.QTextStream(file)
+            content = stream.readAll()
+            self.writer.add_document(path=filename, content=content)
+        self.writer.commit()
+
         self.initUI()
 
     def initUI(self):
@@ -30,17 +54,23 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         button1 = QPushButton("Button A")
         button1.clicked.connect(self.click1)
         layout.addWidget(button1)
-        button2 = QPushButton("Button B")
+
+        button2 = QPushButton("search")
+        button2.clicked.connect(self.click_search)
         layout.addWidget(button2)
+
+        # button2 = QPushButton("Button B")
+        # button2.clicked.connect(self.build_index)
+        # layout.addWidget(button2)
 
         self.finder = QLineEdit()
         layout.addWidget(self.finder)
         self.horizontalGroupBox.setLayout(layout)
 
         self.list1 = QListWidget()
-        source_files = QDir("data").entryList(QDir.Files)
-        print(source_files)
-        self.list1.addItems(source_files)
+        # source_files = QDir("data").entryList(QDir.Files)
+        print(self.source_files)
+        self.list1.addItems(self.source_files)
         self.list1.currentItemChanged.connect(self.listChanged)
 
         button_left_add = QPushButton("add file")
@@ -74,7 +104,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         filename = self.list1.currentItem().text()
         file = QFile("data/{}".format(filename))
         if not file.open(QtCore.QIODevice.ReadOnly):
-            print("blah")
+            print("couldn't open file")
         stream = QtCore.QTextStream(file)
         self.editor1.setText(stream.readAll())
 
@@ -84,6 +114,15 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         a = QDir("data")
         print(a.entryList(QDir.Files))
         self.msg.emit(str("wohoo"))
+
+    def click_search(self):
+        with self.ix.searcher() as searcher:
+            query = QueryParser("content", self.ix.schema).parse(self.finder.text())
+            results = searcher.search(query)
+            result_count = len(results)
+            print("click_search", self.finder.text(), "len: ", result_count)
+            for i in range(result_count):
+                print("result {}: ".format(i), results[i])
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape:
@@ -174,8 +213,5 @@ class Example(QMainWindow): #QDialog #QMainWindow
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    # ex = Example()
-    # sys.exit(app.exec_())
-
     ex = Example()
     sys.exit(app.exec_())
