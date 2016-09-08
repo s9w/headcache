@@ -89,6 +89,11 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         # self.editor1.setFont(font)
 
         self.view1 = QTextBrowser()
+        font = QFont()
+        font.setFamily('Courier')
+        font.setFixedPitch(True)
+        font.setPointSize(10)
+        self.editor1.setFont(font)
 
         mainWidget = QWidget()
         mainLayout = QHBoxLayout()
