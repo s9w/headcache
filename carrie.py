@@ -1,5 +1,6 @@
 import sys
 import os, os.path
+import markdown2
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QComboBox, QDialog,
@@ -8,6 +9,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QComboBox, QDia
         QVBoxLayout)
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from PyQt5.QtCore import QDir, pyqtSignal, QFile
+from PyQt5.QtGui import QFont
 from PyQt5 import QtCore
 from PyQt5 import QtGui
 
@@ -41,6 +43,8 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         self.writer.commit()
 
         self.initUI()
+
+        self.markdowner = markdown2.Markdown(extras=["tables"])
 
     def initUI(self):
         font = QtGui.QFont()
@@ -82,17 +86,15 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         left_widget.setLayout(left_layout)
 
         self.editor1 = QTextEdit()
-        self.editor1.setPlainText("text fill")
         # self.editor1.setFont(font)
 
-        view1 = QTextBrowser()
-        view1.setHtml("<h1>Abc Test Superduper</h1>")
+        self.view1 = QTextBrowser()
 
         mainWidget = QWidget()
         mainLayout = QHBoxLayout()
         mainLayout.addWidget(left_widget)
         mainLayout.addWidget(self.editor1)
-        mainLayout.addWidget(view1)
+        mainLayout.addWidget(self.view1)
 
         allLayout.addWidget(self.horizontalGroupBox)
         # allLayout.addWidget(mainWidget)
@@ -106,7 +108,10 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         if not file.open(QtCore.QIODevice.ReadOnly):
             print("couldn't open file")
         stream = QtCore.QTextStream(file)
-        self.editor1.setText(stream.readAll())
+        source_string = stream.readAll()
+        html_string = self.markdowner.convert(source_string)
+        self.editor1.setPlainText(source_string)
+        self.view1.setHtml(html_string)
 
     def click1(self):
         sender = self.sender()
@@ -123,6 +128,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
             print("click_search", self.finder.text(), "len: ", result_count)
             for i in range(result_count):
                 print("result {}: ".format(i), results[i])
+                print(results[i].highlights("content"))
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape:
