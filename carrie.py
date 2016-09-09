@@ -53,11 +53,19 @@ class MainWidget(QFrame): #QDialog #QMainWindow
             self.writer.add_document(path=filename, content=content)
         self.writer.commit()
 
+        # markdown
         self.block_lexer = AstBlockParser()
-
         self.markdowner = mistune.Markdown(renderer=IdRenderer(), block=self.block_lexer)
-        self.data = self.load_data()
+        self.part_block_lexer = AstBlockParserPart()
+        self.markdowner_simple = mistune.Markdown(renderer=IdRenderer(), block=self.part_block_lexer)
 
+        # stored data
+        self.data = self.load_data()
+        self.active_filename = ""
+        self.active_part_name = ""
+        self.active_part_index = None
+
+        # setup GUI
         self.initUI()
         if self.source_files:
             self.list1.setCurrentRow(0)
@@ -78,7 +86,6 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         return data_dict
 
     def initUI(self):
-        font = QtGui.QFont()
         allLayout = QVBoxLayout()
 
         self.horizontalGroupBox = QGroupBox("Horizontal layout")
@@ -113,6 +120,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         left_widget.setLayout(left_layout)
 
         self.editor1 = QTextEdit()
+        self.editor1.textChanged.connect(self.editor_changed)
         # self.editor1.setFont(font)
 
         self.view1 = QTextBrowser()
@@ -135,22 +143,48 @@ class MainWidget(QFrame): #QDialog #QMainWindow
 
         self.setLayout(allLayout)
 
+    def update_result_view(self):
+        # get current text from internal data
+        editor_text = self.data[self.active_filename]["content"][self.active_part_index]["content"]
+
+        # parsing
+        self.part_block_lexer.clear_ast()
+        html_string = self.markdowner_simple(editor_text)
+
+        # set the preview html
+        self.view1.setHtml(html_string)
+
+        # update data and part list when part name was edited
+        if self.active_part_name != self.part_block_lexer.ast["title"]:
+            self.list_parts.currentItem().setText(self.part_block_lexer.ast["title"])
+            self.data[self.active_filename]["content"][self.active_part_index]["title"] = self.part_block_lexer.ast["title"]
+
+    def editor_changed(self):
+        # update internal data
+        self.data[self.active_filename]["content"][self.active_part_index]["content"] = self.editor1.toPlainText()
+
+        # update GUI
+        self.update_result_view()
+
     def listChanged(self):
-        filename = self.list1.currentItem().text()
-        part_names = [part["title"] for part in self.data[filename]["content"]]
+        # update state
+        self.active_filename = self.list1.currentItem().text()
+
+        # update part list
+        part_names = [part["title"] for part in self.data[self.active_filename]["content"]]
         self.list_parts.clear()
         self.list_parts.addItems(part_names)
 
     def list_parts_selected(self):
-        filename = self.list1.currentItem().text()
-        part_index = self.list_parts.currentRow()
         current_item = self.list_parts.currentItem()
         if current_item:
-            part_name = current_item.text()
-            source_string = self.data[filename]["content"][part_index]["content"]
+            self.active_part_index = self.list_parts.currentRow()
+            self.active_part_name = current_item.text()
+            source_string = self.data[self.active_filename]["content"][self.active_part_index]["content"]
             self.editor1.setPlainText(source_string)
-            self.view1.setHtml(self.data[filename]["html"])
-            self.view1.scrollToAnchor(part_name)
+            html_string = self.markdowner_simple(source_string)
+            self.view1.setHtml(html_string)
+            # self.view1.scrollToAnchor(part_name)
 
 
     def reload_changes(self):
@@ -302,6 +336,54 @@ class AstBlockParser(mistune.BlockLexer):
         elif level == 2:
             self.ast["content"].append({"title": text, "content": ""})
         super().parse_heading(m)
+
+class AstBlockParserPart(mistune.BlockLexer):
+    def __init__(self, rules=None, **kwargs):
+        self.ast = {}
+        super().__init__(rules, **kwargs)
+
+    def clear_ast(self):
+        self.ast = {}
+
+    def parse(self, text, rules=None):
+        text = text.rstrip('\n')
+
+        if not rules:
+            rules = self.default_rules
+
+        def manipulate(text):
+            for key in rules:
+                rule = getattr(self.rules, key)
+                m = rule.match(text)
+                if not m:
+                    continue
+
+                getattr(self, 'parse_%s' % key)(m)
+
+                if key != "heading":
+                    self.ast["content"] += m.group(0)
+                if key == "heading" and len(self.ast["content"]) > 0:
+                    self.ast["content"] += m.string[:m.end()]
+                return m
+            return False  # pragma: no cover
+
+        while text:
+            m = manipulate(text)
+            if m is not False:
+                text = text[len(m.group(0)):]
+                continue
+            if text:  # pragma: no cover
+                raise RuntimeError('Infinite loop at: %s' % text)
+        return self.tokens
+
+    def parse_heading(self, m):
+        level = len(m.group(1))
+        text = m.group(2)
+        if level == 2:
+            self.ast["title"] = text
+            self.ast["content"] = ""
+        super().parse_heading(m)
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
