@@ -59,6 +59,8 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         self.data = self.load_data()
 
         self.initUI()
+        if self.source_files:
+            self.list1.setCurrentRow(0)
 
     def load_data(self):
         data_dict = {}
@@ -77,10 +79,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
 
     def initUI(self):
         font = QtGui.QFont()
-        # font.setStyleStrategy(QtGui.QFont.PreferAntialias)
-
         allLayout = QVBoxLayout()
-        # allLayout.setMenuBar(self.menuBar)
 
         self.horizontalGroupBox = QGroupBox("Horizontal layout")
         layout = QHBoxLayout()
@@ -92,16 +91,13 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         button2.clicked.connect(self.click_search)
         layout.addWidget(button2)
 
-        # button2 = QPushButton("Button B")
-        # button2.clicked.connect(self.build_index)
-        # layout.addWidget(button2)
-
         self.finder = QLineEdit()
         layout.addWidget(self.finder)
         self.horizontalGroupBox.setLayout(layout)
 
         self.list1 = QListWidget()
-        self.list1.addItems(self.source_files)
+        if self.source_files:
+            self.list1.addItems(self.source_files)
         self.list1.currentItemChanged.connect(self.listChanged)
 
         self.list_parts = QListWidget()
@@ -278,13 +274,12 @@ class AstBlockParser(mistune.BlockLexer):
                 if not m:
                     continue
 
-                # m_copy = rule.match(text)
                 getattr(self, 'parse_%s' % key)(m)
 
                 if key != "heading":
                     self.ast["content"][-1]["content"] += m.group(0)
                 if key == "heading" and len(self.ast["content"]) > 0:
-                    self.ast["content"][-1]["content"] += m.string
+                    self.ast["content"][-1]["content"] += m.string[:m.end()]
                 return m
             return False  # pragma: no cover
 
@@ -323,24 +318,3 @@ if __name__ == '__main__':
     observer.stop()
     observer.join()
     sys.exit(status)
-
-    s = u"""# headline 1
-## h2
-blabla **bold** and *italic*
-## h2 zwei
-content2
-- list1
-- list2
-
-```
-1+1;
-```"""
-
-
-
-
-    # block_lexer = AstBlockParser()
-    # markdowner = mistune.Markdown(renderer=mistune.Renderer(escape=True, hard_wrap=True), block=block_lexer)
-    # res = markdowner(s)
-    # print(res)
-    # print(json.dumps(block_lexer.ast, indent=4, sort_keys=True))
