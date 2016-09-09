@@ -1,6 +1,11 @@
 import sys
 import os, os.path
 import markdown2
+import logging
+
+import time
+from watchdog.observers import Observer
+from watchdog.events import LoggingEventHandler
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QComboBox, QDialog,
@@ -225,4 +230,15 @@ class Example(QMainWindow): #QDialog #QMainWindow
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = Example()
-    sys.exit(app.exec_())
+
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
+    event_handler = LoggingEventHandler()
+    observer = Observer()
+    observer.schedule(event_handler, path="data", recursive=True)
+    observer.start()
+    status = app.exec_()
+    observer.stop()
+    observer.join()
+    sys.exit(status)
