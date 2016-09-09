@@ -1,0 +1,29 @@
+QLineEdit{
+	background-color: #e6e6e6;
+	border-radius: 1px;
+}
+
+QFrame{
+	background-color: #222222;
+	color: #f8f8f2;
+}
+
+QListWidget{
+	border: 1px solid gray;
+}
+
+QListWidget::item{
+	color: #f8f8f2;
+}
+
+QListWidget::item:selected{
+    background-color: #444444;
+}
+
+#editor{
+	border: 1px solid gray;
+}
+
+#preview{
+	border: 1px solid gray;
+}

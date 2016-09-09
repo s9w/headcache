@@ -13,7 +13,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QComboBox, QDialog,
         QDialogButtonBox, QFormLayout, QGridLayout, QGroupBox, QHBoxLayout, QFrame,
         QLabel, QLineEdit, QMenu, QMenuBar, QPushButton, QSpinBox, QTextEdit, QTextBrowser,
-        QVBoxLayout)
+        QVBoxLayout, QStyleFactory, QStyle)
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from PyQt5.QtCore import QDir, pyqtSignal, QFile
 from PyQt5.QtGui import QFont
@@ -70,6 +70,9 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         if self.source_files:
             self.list1.setCurrentRow(0)
 
+        with open("style.qss") as file_style:
+            self.setStyleSheet(file_style.read())
+
     def load_data(self):
         data_dict = {}
         for filename in self.source_files:
@@ -88,7 +91,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
     def initUI(self):
         allLayout = QVBoxLayout()
 
-        self.horizontalGroupBox = QGroupBox("Horizontal layout")
+        self.top_controls = QWidget()
         layout = QHBoxLayout()
         button1 = QPushButton("reload")
         button1.clicked.connect(self.reload_changes)
@@ -100,7 +103,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
 
         self.finder = QLineEdit()
         layout.addWidget(self.finder)
-        self.horizontalGroupBox.setLayout(layout)
+        self.top_controls.setLayout(layout)
 
         self.list1 = QListWidget()
         if self.source_files:
@@ -120,10 +123,12 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         left_widget.setLayout(left_layout)
 
         self.editor1 = QTextEdit()
+        self.editor1.setObjectName("editor")
         self.editor1.textChanged.connect(self.editor_changed)
         # self.editor1.setFont(font)
 
         self.view1 = QTextBrowser()
+        self.view1.setObjectName("preview")
         font = QFont()
         font.setFamily('Courier')
         font.setFixedPitch(True)
@@ -137,7 +142,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         mainLayout.addWidget(self.editor1)
         mainLayout.addWidget(self.view1)
 
-        allLayout.addWidget(self.horizontalGroupBox)
+        allLayout.addWidget(self.top_controls)
         # allLayout.addWidget(mainWidget)
         allLayout.addLayout(mainLayout)
 
@@ -388,6 +393,10 @@ class AstBlockParserPart(mistune.BlockLexer):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = Example()
+
+    app.setStyle("Fusion")
+    print("QtGui.QStyleFactory.keys()", QStyleFactory.keys())
+
 
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(message)s',
