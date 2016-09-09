@@ -1,7 +1,9 @@
 import sys
 import os, os.path
 import markdown2
+import mistune
 import logging
+import json
 
 import time
 from watchdog.observers import Observer
@@ -22,6 +24,10 @@ from whoosh.index import create_in
 from whoosh.fields import *
 from whoosh.filedb.filestore import FileStorage
 from whoosh.qparser import QueryParser
+
+class IdRenderer(mistune.Renderer):
+    def header(self, text, level, raw):
+        return '<h{0} id="{1}">{1}</h{0}>\n'.format(level, text)
 
 class MainWidget(QFrame): #QDialog #QMainWindow
     msg = pyqtSignal(str)
@@ -47,9 +53,27 @@ class MainWidget(QFrame): #QDialog #QMainWindow
             self.writer.add_document(path=filename, content=content)
         self.writer.commit()
 
+        self.block_lexer = AstBlockParser()
+
+        self.markdowner = mistune.Markdown(renderer=IdRenderer(), block=self.block_lexer)
+        self.data = self.load_data()
+
         self.initUI()
 
-        self.markdowner = markdown2.Markdown(extras=["tables"])
+    def load_data(self):
+        data_dict = {}
+        for filename in self.source_files:
+            file = QFile("data/{}".format(filename))
+            if not file.open(QtCore.QIODevice.ReadOnly):
+                print("couldn't open file")
+            stream = QtCore.QTextStream(file)
+            content = stream.readAll()
+            self.block_lexer.clear_ast()
+            html = self.markdowner(content)
+            self.block_lexer.ast["html"] = html
+            data_dict[filename] = self.block_lexer.ast
+        # print(json.dumps(data_dict["cpp.md"], indent=2))
+        return data_dict
 
     def initUI(self):
         font = QtGui.QFont()
@@ -60,8 +84,8 @@ class MainWidget(QFrame): #QDialog #QMainWindow
 
         self.horizontalGroupBox = QGroupBox("Horizontal layout")
         layout = QHBoxLayout()
-        button1 = QPushButton("Button A")
-        button1.clicked.connect(self.click1)
+        button1 = QPushButton("reload")
+        button1.clicked.connect(self.reload_changes)
         layout.addWidget(button1)
 
         button2 = QPushButton("search")
@@ -77,16 +101,18 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         self.horizontalGroupBox.setLayout(layout)
 
         self.list1 = QListWidget()
-        # source_files = QDir("data").entryList(QDir.Files)
-        print(self.source_files)
         self.list1.addItems(self.source_files)
         self.list1.currentItemChanged.connect(self.listChanged)
+
+        self.list_parts = QListWidget()
+        self.list_parts .currentItemChanged.connect(self.list_parts_selected)
 
         button_left_add = QPushButton("add file")
 
         left_widget = QWidget()
         left_layout = QVBoxLayout()
         left_layout.addWidget(self.list1)
+
         left_layout.addWidget(button_left_add)
         left_widget.setLayout(left_layout)
 
@@ -103,6 +129,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         mainWidget = QWidget()
         mainLayout = QHBoxLayout()
         mainLayout.addWidget(left_widget)
+        mainLayout.addWidget(self.list_parts)
         mainLayout.addWidget(self.editor1)
         mainLayout.addWidget(self.view1)
 
@@ -114,21 +141,24 @@ class MainWidget(QFrame): #QDialog #QMainWindow
 
     def listChanged(self):
         filename = self.list1.currentItem().text()
-        file = QFile("data/{}".format(filename))
-        if not file.open(QtCore.QIODevice.ReadOnly):
-            print("couldn't open file")
-        stream = QtCore.QTextStream(file)
-        source_string = stream.readAll()
-        html_string = self.markdowner.convert(source_string)
-        self.editor1.setPlainText(source_string)
-        self.view1.setHtml(html_string)
+        part_names = [part["title"] for part in self.data[filename]["content"]]
+        self.list_parts.clear()
+        self.list_parts.addItems(part_names)
 
-    def click1(self):
-        sender = self.sender()
-        print("click1", sender.text())
-        a = QDir("data")
-        print(a.entryList(QDir.Files))
-        self.msg.emit(str("wohoo"))
+    def list_parts_selected(self):
+        filename = self.list1.currentItem().text()
+        part_index = self.list_parts.currentRow()
+        current_item = self.list_parts.currentItem()
+        if current_item:
+            part_name = current_item.text()
+            source_string = self.data[filename]["content"][part_index]["content"]
+            self.editor1.setPlainText(source_string)
+            self.view1.setHtml(self.data[filename]["html"])
+            self.view1.scrollToAnchor(part_name)
+
+
+    def reload_changes(self):
+        print("reload")
 
     def click_search(self):
         with self.ix.searcher() as searcher:
@@ -227,6 +257,57 @@ class Example(QMainWindow): #QDialog #QMainWindow
         self.formGroupBox.setLayout(layout)
 
 
+class AstBlockParser(mistune.BlockLexer):
+    def __init__(self, rules=None, **kwargs):
+        self.ast = {}
+        super().__init__(rules, **kwargs)
+
+    def clear_ast(self):
+        self.ast = {}
+
+    def parse(self, text, rules=None):
+        text = text.rstrip('\n')
+
+        if not rules:
+            rules = self.default_rules
+
+        def manipulate(text):
+            for key in rules:
+                rule = getattr(self.rules, key)
+                m = rule.match(text)
+                if not m:
+                    continue
+
+                # m_copy = rule.match(text)
+                getattr(self, 'parse_%s' % key)(m)
+
+                if key != "heading":
+                    self.ast["content"][-1]["content"] += m.group(0)
+                if key == "heading" and len(self.ast["content"]) > 0:
+                    self.ast["content"][-1]["content"] += m.string
+                return m
+            return False  # pragma: no cover
+
+        while text:
+            m = manipulate(text)
+            if m is not False:
+                text = text[len(m.group(0)):]
+                continue
+            if text:  # pragma: no cover
+                raise RuntimeError('Infinite loop at: %s' % text)
+        return self.tokens
+
+    def parse_heading(self, m):
+        level = len(m.group(1))
+        text = m.group(2)
+        if level == 1:
+            self.ast["title"] = text
+            self.ast["content"] = []
+            self.ast["html"] = ""
+        elif level == 2:
+            self.ast["content"].append({"title": text, "content": ""})
+        super().parse_heading(m)
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = Example()
@@ -242,3 +323,24 @@ if __name__ == '__main__':
     observer.stop()
     observer.join()
     sys.exit(status)
+
+    s = u"""# headline 1
+## h2
+blabla **bold** and *italic*
+## h2 zwei
+content2
+- list1
+- list2
+
+```
+1+1;
+```"""
+
+
+
+
+    # block_lexer = AstBlockParser()
+    # markdowner = mistune.Markdown(renderer=mistune.Renderer(escape=True, hard_wrap=True), block=block_lexer)
+    # res = markdowner(s)
+    # print(res)
+    # print(json.dumps(block_lexer.ast, indent=4, sort_keys=True))
