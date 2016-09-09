@@ -1,6 +1,5 @@
 import sys
 import os, os.path
-import markdown2
 import mistune
 import logging
 import json
@@ -18,12 +17,13 @@ from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from PyQt5.QtCore import QDir, pyqtSignal, QFile
 from PyQt5.QtGui import QFont
 from PyQt5 import QtCore
-from PyQt5 import QtGui
 
 from whoosh.index import create_in
 from whoosh.fields import *
 from whoosh.filedb.filestore import FileStorage
 from whoosh.qparser import QueryParser
+
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 
 class IdRenderer(mistune.Renderer):
     def header(self, text, level, raw):
@@ -72,6 +72,8 @@ class MainWidget(QFrame): #QDialog #QMainWindow
 
         with open("style.qss") as file_style:
             self.setStyleSheet(file_style.read())
+        with open("preview_style.css") as file_style:
+            self.preview_css_str = '<style type="text/css">{}</style>'.format(file_style.read())
 
     def load_data(self):
         data_dict = {}
@@ -128,6 +130,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         # self.editor1.setFont(font)
 
         self.view1 = QTextBrowser()
+        # self.view1 = QWebEngineView()
         self.view1.setObjectName("preview")
         font = QFont()
         font.setFamily('Courier')
@@ -154,7 +157,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
 
         # parsing
         self.part_block_lexer.clear_ast()
-        html_string = self.markdowner_simple(editor_text)
+        html_string = self.preview_css_str + self.markdowner_simple(editor_text)
 
         # set the preview html
         self.view1.setHtml(html_string)
@@ -187,7 +190,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
             self.active_part_name = current_item.text()
             source_string = self.data[self.active_filename]["content"][self.active_part_index]["content"]
             self.editor1.setPlainText(source_string)
-            html_string = self.markdowner_simple(source_string)
+            html_string = self.preview_css_str + self.markdowner_simple(source_string)
             self.view1.setHtml(html_string)
             # self.view1.scrollToAnchor(part_name)
 

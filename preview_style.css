@@ -1,0 +1,26 @@
+body{
+    background-color: #222222;
+	color: #f8f8f2;
+}
+
+h2{color: red;}
+
+table{
+    margin-top: 1em;
+    /*border-style: solid;*/
+    /*border-color: white;*/
+    /*border: 1px solid #f8f8f2;*/
+    border-collapse: collapse;
+}
+
+th, td {
+    text-align: left;
+    padding: 8px;
+}
+
+tr:nth-child(even){background-color: #353535
+}
+
+th {
+    background-color: #4CAF50;
+}
