@@ -43,7 +43,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         self.ix = create_in("indexdir", schema)
         self.writer = self.ix.writer()
 
-        self.source_files = QDir("data").entryList(QDir.Files)
+        self.source_files = QDir("data").entryList(["*.md"], QDir.Files)
         for filename in self.source_files:
             file = QFile("data/{}".format(filename))
             if not file.open(QtCore.QIODevice.ReadOnly):
