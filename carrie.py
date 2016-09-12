@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QComboBox, QDia
         QVBoxLayout, QStyleFactory, QStyle)
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from PyQt5.QtCore import QDir, pyqtSignal, QFile
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QFontMetrics
 from PyQt5 import QtCore
 
 from whoosh.index import create_in
@@ -110,6 +110,8 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         self.list1 = QListWidget()
         if self.source_files:
             self.list1.addItems(self.source_files)
+            self.list1.setMaximumWidth(self.list1.sizeHintForColumn(0) + self.list1.frameWidth() * 2)
+            self.list1.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.list1.currentItemChanged.connect(self.listChanged)
 
         self.list_parts = QListWidget()
@@ -182,6 +184,8 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         part_names = [part["title"] for part in self.data[self.active_filename]["content"]]
         self.list_parts.clear()
         self.list_parts.addItems(part_names)
+        self.list_parts.setMaximumWidth(self.list_parts.sizeHintForColumn(0) + self.list_parts.frameWidth() * 2 )
+        self.list_parts.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
     def list_parts_selected(self):
         current_item = self.list_parts.currentItem()
