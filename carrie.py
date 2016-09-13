@@ -259,7 +259,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         allLayout.addWidget(self.splitter, stretch=1)
         self.setLayout(allLayout)
 
-    def update_result_view(self):
+    def update_preview(self):
         # get current text from internal data
         editor_text = self.data[self.active_filename]["content"][self.active_part_index]["content"]
 
@@ -280,7 +280,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.data[self.active_filename]["content"][self.active_part_index]["content"] = self.editor1.toPlainText()
 
         # update GUI
-        self.update_result_view()
+        self.update_preview()
 
     def listChanged(self):
         # update state
@@ -407,10 +407,11 @@ class AstBlockParser(mistune.BlockLexer):
 
                 getattr(self, 'parse_%s' % key)(m)
 
-                if key != "heading":
+                # self.list_rules excluded to prevent the internal recalling of parse() to create double outputs
+                if key != "heading" and rules != self.list_rules:
                     self.ast["content"][-1]["content"] += m.group(0)
                 if key == "heading" and len(self.ast["content"]) > 0:
-                    self.ast["content"][-1]["content"] += m.string[:m.end()]
+                    self.ast["content"][-1]["content"] += m.group(0)
                 return m
             return False  # pragma: no cover
 
@@ -457,10 +458,10 @@ class AstBlockParserPart(mistune.BlockLexer):
 
                 getattr(self, 'parse_%s' % key)(m)
 
-                if key != "heading":
+                if key != "heading" and rules != self.list_rules:
                     self.ast["content"] += m.group(0)
                 if key == "heading" and len(self.ast["content"]) > 0:
-                    self.ast["content"] += m.string[:m.end()]
+                    self.ast["content"] += m.group(0)
                 return m
             return False  # pragma: no cover
 
