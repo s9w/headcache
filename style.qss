@@ -10,6 +10,7 @@ QLineEdit{
 
 QStatusBar{
     background-color: #5a5a5a;
+    color: #f8f8f2;
 }
 
 QListWidget{
@@ -33,15 +34,16 @@ QListWidget::item:selected{
 }
 
 #search_result_list{
-    background-color: #222222;
+    background-color: rgba(255,255,255, 0);
 }
 
 #search_result_list::item{
-    background-color: #222222;
+    background-color: rgba(100,100,100, 200);
+    border-bottom: 1px solid black;
 }
 
 #search_result_list::item:selected{
-    background-color: #444444;
+    background-color: rgba(100, 100,255, 100);
 }
 
 #inner_label{

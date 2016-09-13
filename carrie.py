@@ -79,7 +79,7 @@ class Overlay(QWidget):
         self.l1.setObjectName("search_result_list")
         self.l1.setViewMode(QListView.ListMode)
 
-        for t1 in ["t1", "t2"]:
+        for t1 in ["t1", "t2", "t3"]:
             item_widget = QCustomQWidget() #parent)
             item_widget.set_text(t1)
             item = QListWidgetItem()
@@ -296,7 +296,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         else:
             self.overlay.show()
 
-        self.overlay.setGeometry(QRect(self.finder.pos() + self.finder.rect().bottomLeft(), QSize(400, 100)))
+        self.overlay.setGeometry(QRect(self.finder.pos() + self.finder.rect().bottomLeft(), QSize(400, 200)))
 
     def resizeEvent(self, e):
         if e.oldSize() != QSize(-1, -1):
