@@ -30,7 +30,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QComboBox, QDia
         QLabel, QLineEdit, QMenu, QMenuBar, QPushButton, QSpinBox, QTextEdit, QTextBrowser,
         QVBoxLayout, QStyleFactory, QStyle, QSplitter)
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
-from PyQt5.QtCore import QDir, pyqtSignal, QFile
+from PyQt5.QtCore import QDir, pyqtSignal, QFile, QEvent
 from PyQt5.QtGui import QFont, QFontMetrics
 from PyQt5 import QtCore
 
@@ -44,38 +44,6 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView
 class IdRenderer(mistune.Renderer):
     def header(self, text, level, raw):
         return '<h{0} id="{1}">{1}</h{0}>\n'.format(level, text)
-
-
-# class HTMLDelegate(QStyledItemDelegate):
-#     def __init__(self, parent=None):
-#         super(HTMLDelegate, self).__init__(parent)
-#         self.doc = QTextDocument(self)
-#
-#     def paint(self, painter, option, index):
-#         painter.save()
-#
-#         options = QStyleOptionViewItem(option)
-#         self.initStyleOption(options, index)
-#
-#         self.doc.setHtml(options.text)
-#         options.text = ""
-#
-#         style = QApplication.style() if options.widget is None \
-#             else options.widget.style()
-#         style.drawControl(QStyle.CE_ItemViewItem, options, painter)
-#
-#         ctx = QAbstractTextDocumentLayout.PaintContext()
-#
-#         if option.state & QStyle.State_Selected:
-#             ctx.palette.setColor(QPalette.Text, option.palette.color(
-#                 QPalette.Active, QPalette.HighlightedText))
-#
-#         textRect = style.subElementRect(QStyle.SE_ItemViewItemText, options)
-#         painter.translate(textRect.topLeft())
-#         painter.setClipRect(textRect.translated(-textRect.topLeft()))
-#         self.doc.documentLayout().draw(painter, ctx)
-#
-#         painter.restore()
 
 
 class QCustomQWidget(QWidget):
@@ -161,17 +129,31 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         # setup GUI
         self.initUI()
+        self.config = self.load_config()
+        self.parent().resize(*self.config["window_size"])
+
         if self.source_files:
             self.list1.setCurrentRow(0)
 
-        with open("style.qss") as file_style:
-            self.setStyleSheet(file_style.read())
         with open("preview_style.css") as file_style:
             self.preview_css_str = '<style type="text/css">{}</style>'.format(file_style.read())
 
         self.overlay = Overlay(self)
         self.overlay.hide()
         self.setObjectName("mainframe")
+
+    def load_config(self):
+        try:
+            with open('config.json') as data_file:
+                return json.load(data_file)
+        except FileNotFoundError:
+            return {
+                "window_size": [800, 400]
+            }
+
+    def save_config(self):
+        with open("config.json", "w") as f:
+            json.dump(self.config, f, indent=4)
 
     def load_data(self):
         data_dict = {}
@@ -185,7 +167,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             html = self.markdowner(content)
             self.block_lexer.ast["html"] = html
             data_dict[filename] = self.block_lexer.ast
-        # print(json.dumps(data_dict["cpp.md"], indent=2))
         return data_dict
 
     def initUI(self):
@@ -317,6 +298,13 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         self.overlay.setGeometry(QRect(self.finder.pos() + self.finder.rect().bottomLeft(), QSize(400, 100)))
 
+    def resizeEvent(self, e):
+        if e.oldSize() != QSize(-1, -1):
+            self.config["window_size"] = [self.parent().size().width(), self.parent().size().height()]
+
+    def closeEvent(self, *args, **kwargs):
+        self.save_config()
+
     def click_search(self):
         with self.ix.searcher() as searcher:
             query = QueryParser("content", self.ix.schema).parse(self.finder.text())
@@ -330,58 +318,28 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape:
             self.finder.setFocus()
-            # self.close()
 
 
-class Example(QMainWindow): #QDialog #QMainWindow
-    # NumGridRows = 3
-    # NumButtons = 4
-
+class Example(QMainWindow):
     def __init__(self):
         super().__init__()
         self.initUI()
 
     def initUI(self):
         self.main_widget = MainWidget(self)
-        # textEdit = QTextEdit()
-        # self.setCentralWidget(textEdit)
         self.setCentralWidget(self.main_widget)
 
         self.statusbar = self.statusBar()
         self.main_widget.msg.connect(self.statusbar.showMessage)
-        # self.statusBar().showMessage('Ready')
+        with open("style.qss") as file_style:
+            self.setStyleSheet(file_style.read())
+        self.statusBar().showMessage('Ready')
 
         self.setWindowTitle("Carrie")
         self.show()
 
-    def createMenu(self):
-        self.menuBar = QMenuBar()
-
-        self.fileMenu = QMenu("&File", self)
-        self.exitAction = self.fileMenu.addAction("E&xit")
-        self.menuBar.addMenu(self.fileMenu)
-
-        self.exitAction.triggered.connect(self.accept)
-
-    def createHorizontalGroupBox(self):
-        self.horizontalGroupBox = QGroupBox("Horizontal layout")
-        layout = QHBoxLayout()
-
-        button1 = QPushButton("Button A")
-        button1.clicked.connect(self.click1)
-        layout.addWidget(button1)
-
-
-        button2 = QPushButton("Button B")
-        layout.addWidget(button2)
-
-        self.horizontalGroupBox.setLayout(layout)
-
-    def click1(self):
-        sender = self.sender()
-        print("click1", sender.text())
-        a = QDir("data")
-        print(a.entryList(QDir.Files))
+    def closeEvent(self, *args, **kwargs):
+        self.main_widget.closeEvent(*args, **kwargs)
 
 
 class AstBlockParser(mistune.BlockLexer):
@@ -486,7 +444,6 @@ class AstBlockParserPart(mistune.BlockLexer):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = Example()
-    ex.resize(800, 400)
 
     app.setStyle("Fusion")
     print("QtGui.QStyleFactory.keys()", QStyleFactory.keys())
