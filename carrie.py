@@ -5,6 +5,22 @@ import logging
 import json
 
 import time
+
+from PyQt5.QtCore import QPoint
+from PyQt5.QtCore import QRect
+from PyQt5.QtCore import QSize
+from PyQt5.QtGui import QAbstractTextDocumentLayout
+from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QPalette
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QStandardItem
+from PyQt5.QtGui import QStandardItemModel
+from PyQt5.QtGui import QTextDocument
+from PyQt5.QtPositioning import QGeoCoordinate
+from PyQt5.QtWidgets import QAbstractItemView
+from PyQt5.QtWidgets import QListView
+from PyQt5.QtWidgets import QStyleOptionViewItem
+from PyQt5.QtWidgets import QStyledItemDelegate
 from watchdog.observers import Observer
 from watchdog.events import LoggingEventHandler
 
@@ -28,6 +44,84 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView
 class IdRenderer(mistune.Renderer):
     def header(self, text, level, raw):
         return '<h{0} id="{1}">{1}</h{0}>\n'.format(level, text)
+
+
+# class HTMLDelegate(QStyledItemDelegate):
+#     def __init__(self, parent=None):
+#         super(HTMLDelegate, self).__init__(parent)
+#         self.doc = QTextDocument(self)
+#
+#     def paint(self, painter, option, index):
+#         painter.save()
+#
+#         options = QStyleOptionViewItem(option)
+#         self.initStyleOption(options, index)
+#
+#         self.doc.setHtml(options.text)
+#         options.text = ""
+#
+#         style = QApplication.style() if options.widget is None \
+#             else options.widget.style()
+#         style.drawControl(QStyle.CE_ItemViewItem, options, painter)
+#
+#         ctx = QAbstractTextDocumentLayout.PaintContext()
+#
+#         if option.state & QStyle.State_Selected:
+#             ctx.palette.setColor(QPalette.Text, option.palette.color(
+#                 QPalette.Active, QPalette.HighlightedText))
+#
+#         textRect = style.subElementRect(QStyle.SE_ItemViewItemText, options)
+#         painter.translate(textRect.topLeft())
+#         painter.setClipRect(textRect.translated(-textRect.topLeft()))
+#         self.doc.documentLayout().draw(painter, ctx)
+#
+#         painter.restore()
+
+
+class QCustomQWidget(QWidget):
+    def __init__(self, parent=None):
+        super(QCustomQWidget, self).__init__(parent)
+        allLayout = QVBoxLayout()
+
+        self.label = QLabel("test")
+        self.label.setObjectName("inner_label")
+        allLayout.addWidget(self.label)
+
+        # allLayout.setContentsMargins(0,0,0,0)
+        self.setLayout(allLayout)
+
+    def set_text(self, text):
+        self.label.setText("cont: <b>{}</b>".format(text))
+
+
+class Overlay(QWidget):
+    def __init__(self, parent=None):
+        QWidget.__init__(self, parent)
+        allLayout = QVBoxLayout()
+
+        # self.l1 = QListView()
+        # model = QStandardItemModel(self.l1)
+        #
+        # model.appendRow(QStandardItem("one"))
+        # model.appendRow(QStandardItem("two"))
+        # self.l1.setModel(model)
+        # self.l1.setItemDelegate(HTMLDelegate())
+
+        self.l1 = QListWidget(self)
+        self.l1.setObjectName("search_result_list")
+        self.l1.setViewMode(QListView.ListMode)
+
+        for t1 in ["t1", "t2"]:
+            item_widget = QCustomQWidget() #parent)
+            item_widget.set_text(t1)
+            item = QListWidgetItem()
+            item.setSizeHint(item_widget.sizeHint())
+            self.l1.addItem(item)
+            self.l1.setItemWidget(item, item_widget)
+        allLayout.addWidget(self.l1)
+
+        self.setLayout(allLayout)
+
 
 class MainWidget(QFrame): #QDialog #QMainWindow
     msg = pyqtSignal(str)
@@ -75,6 +169,10 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         with open("preview_style.css") as file_style:
             self.preview_css_str = '<style type="text/css">{}</style>'.format(file_style.read())
 
+        self.overlay = Overlay(self)
+        self.overlay.hide()
+        self.setObjectName("mainframe")
+
     def load_data(self):
         data_dict = {}
         for filename in self.source_files:
@@ -108,6 +206,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         self.top_controls.setLayout(layout)
 
         self.list1 = QListWidget()
+        self.list1.setObjectName("file_list")
         if self.source_files:
             self.list1.addItems(self.source_files)
             self.list1.setMaximumWidth(self.list1.sizeHintForColumn(0) + self.list1.frameWidth() * 2)
@@ -115,6 +214,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         self.list1.currentItemChanged.connect(self.listChanged)
 
         self.list_parts = QListWidget()
+        self.list_parts.setObjectName("part_list")
         self.list_parts .currentItemChanged.connect(self.list_parts_selected)
 
         button_left_add = QPushButton("add file")
@@ -200,7 +300,12 @@ class MainWidget(QFrame): #QDialog #QMainWindow
 
 
     def reload_changes(self):
-        print("reload")
+        if self.overlay.isVisible():
+            self.overlay.hide()
+        else:
+            self.overlay.show()
+
+        self.overlay.setGeometry(QRect(self.finder.pos() + self.finder.rect().bottomLeft(), QSize(400, 100)))
 
     def click_search(self):
         with self.ix.searcher() as searcher:
@@ -235,7 +340,7 @@ class Example(QMainWindow): #QDialog #QMainWindow
         self.main_widget.msg.connect(self.statusbar.showMessage)
         # self.statusBar().showMessage('Ready')
 
-        self.setWindowTitle("Basic Layouts")
+        self.setWindowTitle("Carrie")
         self.show()
 
     def createMenu(self):

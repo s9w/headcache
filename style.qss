@@ -3,7 +3,7 @@ QLineEdit{
 	border-radius: 1px;
 }
 
-QFrame{
+#mainframe, #editor, #preview, #file_list, #part_list{
 	background-color: #222222;
 	color: #f8f8f2;
 }
@@ -26,4 +26,19 @@ QListWidget::item:selected{
 
 #preview{
 	border: 1px solid gray;
+}
+
+#search_result_list{
+    background-color: #222222;
+}
+
+#search_result_list::item{    background-color: #222222;
+}
+
+#search_result_list::item:selected{
+    background-color: #444444;
+}
+
+#inner_label{
+    color: #f8f8f2;
 }
