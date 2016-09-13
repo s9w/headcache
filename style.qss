@@ -32,7 +32,8 @@ QListWidget::item:selected{
     background-color: #222222;
 }
 
-#search_result_list::item{    background-color: #222222;
+#search_result_list::item{
+    background-color: #222222;
 }
 
 #search_result_list::item:selected{

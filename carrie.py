@@ -18,7 +18,7 @@ from PyQt5.QtGui import QStandardItemModel
 from PyQt5.QtGui import QTextDocument
 from PyQt5.QtPositioning import QGeoCoordinate
 from PyQt5.QtWidgets import QAbstractItemView
-from PyQt5.QtWidgets import QListView
+from PyQt5.QtWidgets import QListView, QSizePolicy
 from PyQt5.QtWidgets import QStyleOptionViewItem
 from PyQt5.QtWidgets import QStyledItemDelegate
 from watchdog.observers import Observer
@@ -28,7 +28,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QComboBox, QDialog,
         QDialogButtonBox, QFormLayout, QGridLayout, QGroupBox, QHBoxLayout, QFrame,
         QLabel, QLineEdit, QMenu, QMenuBar, QPushButton, QSpinBox, QTextEdit, QTextBrowser,
-        QVBoxLayout, QStyleFactory, QStyle)
+        QVBoxLayout, QStyleFactory, QStyle, QSplitter)
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from PyQt5.QtCore import QDir, pyqtSignal, QFile
 from PyQt5.QtGui import QFont, QFontMetrics
@@ -123,7 +123,7 @@ class Overlay(QWidget):
         self.setLayout(allLayout)
 
 
-class MainWidget(QFrame): #QDialog #QMainWindow
+class MainWidget(QFrame):  # QDialog #QMainWindow
     msg = pyqtSignal(str)
     # import QSciScintilla
 
@@ -209,7 +209,6 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         self.list1.setObjectName("file_list")
         if self.source_files:
             self.list1.addItems(self.source_files)
-            self.list1.setMaximumWidth(self.list1.sizeHintForColumn(0) + self.list1.frameWidth() * 2)
             self.list1.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.list1.currentItemChanged.connect(self.listChanged)
 
@@ -217,22 +216,26 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         self.list_parts.setObjectName("part_list")
         self.list_parts .currentItemChanged.connect(self.list_parts_selected)
 
-        button_left_add = QPushButton("add file")
+        self.button_left_add = QPushButton("+")
+        self.button_left_add.setMaximumWidth(self.button_left_add.sizeHint().height())
 
-        left_widget = QWidget()
+        self.left_widget = QWidget()
         left_layout = QVBoxLayout()
+        left_layout.setContentsMargins(0,0,0,0)
         left_layout.addWidget(self.list1)
-
-        left_layout.addWidget(button_left_add)
-        left_widget.setLayout(left_layout)
+        left_layout.addWidget(self.button_left_add, Qt.AlignRight)
+        left_layout.setAlignment(self.button_left_add, Qt.AlignHCenter)
+        self.left_widget.setLayout(left_layout)
+        self.left_widget.setMinimumWidth(30)
+        # left_max_width = self.list1.sizeHintForColumn(0) + self.list1.frameWidth() * 2
+        left_max_width = 100
+        self.left_widget.setMaximumWidth(left_max_width)
 
         self.editor1 = QTextEdit()
         self.editor1.setObjectName("editor")
         self.editor1.textChanged.connect(self.editor_changed)
-        # self.editor1.setFont(font)
 
         self.view1 = QTextBrowser()
-        # self.view1 = QWebEngineView()
         self.view1.setObjectName("preview")
         font = QFont()
         font.setFamily('Courier')
@@ -240,17 +243,20 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         font.setPointSize(10)
         self.editor1.setFont(font)
 
-        mainWidget = QWidget()
-        mainLayout = QHBoxLayout()
-        mainLayout.addWidget(left_widget)
-        mainLayout.addWidget(self.list_parts)
-        mainLayout.addWidget(self.editor1)
-        mainLayout.addWidget(self.view1)
+        self.splitter = QSplitter()
+        self.splitter.setHandleWidth(0)
+        self.splitter.addWidget(self.left_widget)
+        self.splitter.addWidget(self.list_parts)
+        self.splitter.addWidget(self.editor1)
+        self.splitter.addWidget(self.view1)
+        self.splitter.setSizes([80,80,100,100])
+        self.splitter.setStretchFactor(0, 0)
+        self.splitter.setStretchFactor(1, 0)
+        self.splitter.setStretchFactor(2, 1)
+        self.splitter.setStretchFactor(3, 1)
 
-        allLayout.addWidget(self.top_controls)
-        # allLayout.addWidget(mainWidget)
-        allLayout.addLayout(mainLayout)
-
+        allLayout.addWidget(self.top_controls, stretch=0)
+        allLayout.addWidget(self.splitter, stretch=1)
         self.setLayout(allLayout)
 
     def update_result_view(self):
@@ -282,9 +288,14 @@ class MainWidget(QFrame): #QDialog #QMainWindow
 
         # update part list
         part_names = [part["title"] for part in self.data[self.active_filename]["content"]]
+
         self.list_parts.clear()
         self.list_parts.addItems(part_names)
-        self.list_parts.setMaximumWidth(self.list_parts.sizeHintForColumn(0) + self.list_parts.frameWidth() * 2 )
+        max_width = self.list_parts.sizeHintForColumn(0) + self.list_parts.frameWidth() * 2
+        max_width = 80
+        # self.list_parts.setMaximumWidth(max_width)
+        # self.list_parts.sizehint(max_width)
+        # self.list_parts.setFixedWidth(max_width)
         self.list_parts.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
     def list_parts_selected(self):
@@ -297,7 +308,6 @@ class MainWidget(QFrame): #QDialog #QMainWindow
             html_string = self.preview_css_str + self.markdowner_simple(source_string)
             self.view1.setHtml(html_string)
             # self.view1.scrollToAnchor(part_name)
-
 
     def reload_changes(self):
         if self.overlay.isVisible():
@@ -321,6 +331,7 @@ class MainWidget(QFrame): #QDialog #QMainWindow
         if e.key() == Qt.Key_Escape:
             self.finder.setFocus()
             # self.close()
+
 
 class Example(QMainWindow): #QDialog #QMainWindow
     # NumGridRows = 3
@@ -371,37 +382,6 @@ class Example(QMainWindow): #QDialog #QMainWindow
         print("click1", sender.text())
         a = QDir("data")
         print(a.entryList(QDir.Files))
-
-    def listChanged(self):
-        print("listChanged")
-
-    def createGridGroupBox(self):
-        self.gridGroupBox = QGroupBox("Grid layout")
-        layout = QGridLayout()
-
-        for i in range(Dialog.NumGridRows):
-            label = QLabel("Line %d:" % (i + 1))
-            lineEdit = QLineEdit()
-            layout.addWidget(label, i + 1, 0)
-            layout.addWidget(lineEdit, i + 1, 1)
-
-        self.smallEditor = QTextEdit()
-        self.smallEditor.setPlainText("This widget takes up about two thirds "
-                "of the grid layout.")
-
-        layout.addWidget(self.smallEditor, 0, 2, 4, 1)
-
-        layout.setColumnStretch(1, 10)
-        layout.setColumnStretch(2, 20)
-        self.gridGroupBox.setLayout(layout)
-
-    def createFormGroupBox(self):
-        self.formGroupBox = QGroupBox("Form layout")
-        layout = QFormLayout()
-        layout.addRow(QLabel("Line 1:"), QLineEdit())
-        layout.addRow(QLabel("Line 2, long text:"), QComboBox())
-        layout.addRow(QLabel("Line 3:"), QSpinBox())
-        self.formGroupBox.setLayout(layout)
 
 
 class AstBlockParser(mistune.BlockLexer):
@@ -505,6 +485,7 @@ class AstBlockParserPart(mistune.BlockLexer):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = Example()
+    ex.resize(800, 400)
 
     app.setStyle("Fusion")
     print("QtGui.QStyleFactory.keys()", QStyleFactory.keys())
