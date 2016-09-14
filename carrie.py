@@ -12,7 +12,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
                              QPlainTextEdit, QTextEdit, QLabel, QLineEdit, QPushButton, QTextBrowser,
-                             QVBoxLayout, QSplitter)
+                             QVBoxLayout, QSplitter, QButtonGroup, QToolButton, QSizePolicy)
 from PyQt5.QtWidgets import QListView
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from watchdog.events import LoggingEventHandler
@@ -177,8 +177,31 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         button_debug.clicked.connect(self.click_debug)
         layout.addWidget(button_debug)
 
+        # mode buttons
+        self.button_edit = QPushButton("E")
+        self.button_both = QPushButton("EV")
+        self.button_view = QPushButton("V")
+        self.button_edit.clicked.connect(self.click_mode)
+        self.button_both.clicked.connect(self.click_mode)
+        self.button_view.clicked.connect(self.click_mode)
+        self.button_edit.setCheckable(True)
+        self.button_both.setCheckable(True)
+        self.button_view.setCheckable(True)
+        self.button_both.setChecked(True)
+        self.bg = QButtonGroup()
+        self.bg.addButton(self.button_edit)
+        self.bg.addButton(self.button_both)
+        self.bg.addButton(self.button_view)
+        bg_layout = QHBoxLayout()
+        bg_layout.addWidget(self.button_edit)
+        bg_layout.addWidget(self.button_both)
+        bg_layout.addWidget(self.button_view)
+        bg_layout.setSpacing(0)
+        layout.addLayout(bg_layout)
+
         self.finder = QLineEdit()
         layout.addWidget(self.finder)
+        layout.setContentsMargins(0,0,0,0)
         self.top_controls.setLayout(layout)
 
         self.list1 = QListWidget()
@@ -240,6 +263,18 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         allLayout.addWidget(self.top_controls, stretch=0)
         allLayout.addWidget(self.splitter, stretch=1)
         self.setLayout(allLayout)
+
+    def click_mode(self):
+        sender = self.sender()
+        if sender == self.button_edit:
+            self.editor1.show()
+            self.view1.hide()
+        elif sender == self.button_both:
+            self.editor1.show()
+            self.view1.show()
+        elif sender == self.button_view:
+            self.editor1.hide()
+            self.view1.show()
 
     def update_preview(self):
         # get current text from internal data
@@ -303,6 +338,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
     def click_debug(self):
         print("  click_debug()")
+        self.view1.hide()
 
     def resizeEvent(self, e):
         if e.oldSize() != QSize(-1, -1):
