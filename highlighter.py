@@ -11,10 +11,12 @@ class Highlighter(QSyntaxHighlighter):
         self.highlightingRules = []
 
         # parts
-        format_section = QTextCharFormat()
-        format_section.setForeground(Qt.red)
+        self.format_section = QTextCharFormat()
+        self.format_section.setFontWeight(QFont.Bold)
+        self.format_section.setForeground(Qt.red)
+        # self.format_section.setFontPointSize(20)
         re = QRegExp("##[^\n]*")
-        self.highlightingRules.append((re, format_section))
+        self.highlightingRules.append((re, self.format_section))
 
         # bold
         format_bold = QTextCharFormat()
@@ -26,6 +28,7 @@ class Highlighter(QSyntaxHighlighter):
         # italic
         format_italic = QTextCharFormat()
         format_italic.setFontItalic(True)
+        format_italic.setForeground(QColor(255,150,150))
         re = QRegExp("\*.+\*")
         re.setMinimal(True)
         self.highlightingRules.append((re, format_italic))
@@ -40,6 +43,9 @@ class Highlighter(QSyntaxHighlighter):
         # multiline code
         self.code_start_expr = QRegExp("```")
         self.code_end_expr = QRegExp("```")
+
+    def set_section_size(self, size):
+        self.format_section.setFontPointSize(size)
 
     def highlightBlock(self, text):
         offset = 0

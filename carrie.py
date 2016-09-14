@@ -113,8 +113,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.active_part_index = None
 
         # setup GUI
-        self.initUI()
         self.config = self.load_config()
+        self.initUI()
         self.parent().resize(*self.config["window_size"])
 
         with open("preview_style.css") as file_style:
@@ -128,13 +128,19 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.setObjectName("mainframe")
 
     def load_config(self):
+        config = {
+            "window_size": [800, 400],
+            "editor_font": "Source Code Pro",
+            "editor_font_size": 10,
+            "editor_font_size_section": 14
+        }
+
         try:
             with open('config.json') as data_file:
-                return json.load(data_file)
+                config.update(json.load(data_file))
         except FileNotFoundError:
-            return {
-                "window_size": [800, 400]
-            }
+            pass
+        return config
 
     def save_config(self):
         with open("config.json", "w") as f:
@@ -204,6 +210,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         self.editor1 = QPlainTextEdit()
         self.highlighter = Highlighter(self.editor1.document())
+        self.highlighter.set_section_size(self.config["editor_font_size_section"])
         self.editor1.setObjectName("editor")
         self.editor1.textChanged.connect(self.editor_changed)
         # self.editor1.modificationChanged.connect(self.editor_changed)
@@ -213,9 +220,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.view1 = QTextBrowser()
         self.view1.setObjectName("preview")
         font = QFont()
-        font.setFamily('Courier')
+        font.setFamily(self.config["editor_font"])
         font.setFixedPitch(True)
-        font.setPointSize(10)
+        font.setPointSize(self.config["editor_font_size"])
         self.editor1.setFont(font)
 
         self.splitter = QSplitter()
@@ -285,8 +292,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             if current_item:
                 source_string = self.data[self.active_filename]["content"][self.list_parts.currentRow()]["content"]
                 self.editor1.setPlainText(source_string)
-                # self.editor1.setHtml(source_string)
-                # self.editor1.appendHtml("abc<i>abc</i>")
 
     def reload_changes(self):
         if self.overlay.isVisible():
