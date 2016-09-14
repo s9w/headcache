@@ -1,45 +1,28 @@
-import sys
-import os, os.path
-import mistune
-import logging
 import json
+import logging
+import os
+import os.path
 
-import time
-
-from PyQt5.QtCore import QPoint
+import mistune
+from PyQt5 import QtCore
+from PyQt5.QtCore import QDir, pyqtSignal, QFile
 from PyQt5.QtCore import QRect
 from PyQt5.QtCore import QSize
-from PyQt5.QtGui import QAbstractTextDocumentLayout
-from PyQt5.QtGui import QColor
-from PyQt5.QtGui import QPalette
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtGui import QStandardItem
-from PyQt5.QtGui import QStandardItemModel
-from PyQt5.QtGui import QTextDocument
-from PyQt5.QtPositioning import QGeoCoordinate
-from PyQt5.QtWidgets import QAbstractItemView
-from PyQt5.QtWidgets import QListView, QSizePolicy
-from PyQt5.QtWidgets import QStyleOptionViewItem
-from PyQt5.QtWidgets import QStyledItemDelegate
-from watchdog.observers import Observer
-from watchdog.events import LoggingEventHandler
-
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QComboBox, QDialog,
-        QDialogButtonBox, QFormLayout, QGridLayout, QGroupBox, QHBoxLayout, QFrame,
-        QLabel, QLineEdit, QMenu, QMenuBar, QPushButton, QSpinBox, QTextEdit, QTextBrowser,
-        QVBoxLayout, QStyleFactory, QStyle, QSplitter)
+from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
+                             QPlainTextEdit, QLabel, QLineEdit, QPushButton, QTextBrowser,
+                             QVBoxLayout, QSplitter)
+from PyQt5.QtWidgets import QListView
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
-from PyQt5.QtCore import QDir, pyqtSignal, QFile, QEvent
-from PyQt5.QtGui import QFont, QFontMetrics
-from PyQt5 import QtCore
-
-from whoosh.index import create_in
+from watchdog.events import LoggingEventHandler
+from watchdog.observers import Observer
 from whoosh.fields import *
-from whoosh.filedb.filestore import FileStorage
+from whoosh.index import create_in
 from whoosh.qparser import QueryParser
 
-from PyQt5.QtWebEngineWidgets import QWebEngineView
+from highlighter import Highlighter
+
 
 class IdRenderer(mistune.Renderer):
     def header(self, text, level, raw):
@@ -105,16 +88,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.ix = create_in("indexdir", schema)
         self.writer = self.ix.writer()
 
-        self.source_files = QDir("data").entryList(["*.md"], QDir.Files)
-        for filename in self.source_files:
-            file = QFile("data/{}".format(filename))
-            if not file.open(QtCore.QIODevice.ReadOnly):
-                print("couldn't open file")
-            stream = QtCore.QTextStream(file)
-            content = stream.readAll()
-            self.writer.add_document(path=filename, content=content)
-        self.writer.commit()
-
         # markdown
         self.block_lexer = AstBlockParser()
         self.markdowner = mistune.Markdown(renderer=IdRenderer(), block=self.block_lexer)
@@ -123,6 +96,18 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         # stored data
         self.data = self.load_data()
+
+        # search index
+        filenames = self.data.keys()
+        for filename in filenames:
+            file = QFile("data/{}".format(filename))
+            if not file.open(QtCore.QIODevice.ReadOnly):
+                print("couldn't open file")
+            stream = QtCore.QTextStream(file)
+            content = stream.readAll()
+            self.writer.add_document(path=filename, content=content)
+        self.writer.commit()
+
         self.active_filename = ""
         self.active_part_name = ""
         self.active_part_index = None
@@ -132,11 +117,11 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.config = self.load_config()
         self.parent().resize(*self.config["window_size"])
 
-        if self.source_files:
-            self.list1.setCurrentRow(0)
-
         with open("preview_style.css") as file_style:
             self.preview_css_str = '<style type="text/css">{}</style>'.format(file_style.read())
+
+        if self.data:
+            self.list1.setCurrentRow(0)
 
         self.overlay = Overlay(self)
         self.overlay.hide()
@@ -157,7 +142,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
     def load_data(self):
         data_dict = {}
-        for filename in self.source_files:
+        for filename in QDir("data").entryList(["*.md"], QDir.Files):
             file = QFile("data/{}".format(filename))
             if not file.open(QtCore.QIODevice.ReadOnly):
                 print("couldn't open file")
@@ -182,19 +167,24 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         button2.clicked.connect(self.click_search)
         layout.addWidget(button2)
 
+        button_debug = QPushButton("debug")
+        button_debug.clicked.connect(self.click_debug)
+        layout.addWidget(button_debug)
+
         self.finder = QLineEdit()
         layout.addWidget(self.finder)
         self.top_controls.setLayout(layout)
 
         self.list1 = QListWidget()
         self.list1.setObjectName("file_list")
-        if self.source_files:
-            self.list1.addItems(self.source_files)
+        if self.data:
+            self.list1.addItems(self.data.keys())
             self.list1.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.list1.currentItemChanged.connect(self.listChanged)
+        self.list1.currentItemChanged.connect(self.list_files_changed)
 
         self.list_parts = QListWidget()
         self.list_parts.setObjectName("part_list")
+        self.list_parts.model().rowsInserted.connect(self.list_parts_rows_ins)
         self.list_parts .currentItemChanged.connect(self.list_parts_selected)
 
         self.button_left_add = QPushButton("+")
@@ -212,9 +202,12 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         left_max_width = 100
         self.left_widget.setMaximumWidth(left_max_width)
 
-        self.editor1 = QTextEdit()
+        self.editor1 = QPlainTextEdit()
         self.editor1.setObjectName("editor")
         self.editor1.textChanged.connect(self.editor_changed)
+        # self.editor1.modificationChanged.connect(self.editor_changed)
+        # print("doc", self.editor1.document())
+        # self.editor1.document().contentsChanged.connect(self.editor_changed)
 
         self.view1 = QTextBrowser()
         self.view1.setObjectName("preview")
@@ -242,7 +235,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
     def update_preview(self):
         # get current text from internal data
-        editor_text = self.data[self.active_filename]["content"][self.active_part_index]["content"]
+        editor_text = self.data[self.active_filename]["content"][self.list_parts.currentRow()]["content"]
 
         # parsing
         self.part_block_lexer.clear_ast()
@@ -252,18 +245,20 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.view1.setHtml(html_string)
 
         # update data and part list when part name was edited
-        if self.active_part_name != self.part_block_lexer.ast["title"]:
+        if self.list_parts.currentItem().text() != self.part_block_lexer.ast["title"]:
             self.list_parts.currentItem().setText(self.part_block_lexer.ast["title"])
-            self.data[self.active_filename]["content"][self.active_part_index]["title"] = self.part_block_lexer.ast["title"]
+            self.data[self.active_filename]["content"][self.list_parts.currentRow()]["title"] = self.part_block_lexer.ast["title"]
 
     def editor_changed(self):
-        # update internal data
-        self.data[self.active_filename]["content"][self.active_part_index]["content"] = self.editor1.toPlainText()
+        if self.list_parts.currentRow() != -1:
 
-        # update GUI
-        self.update_preview()
+            # update internal data
+            self.data[self.active_filename]["content"][self.list_parts.currentRow()]["content"] = self.editor1.toPlainText()
 
-    def listChanged(self):
+            # update GUI
+            self.update_preview()
+
+    def list_files_changed(self):
         # update state
         self.active_filename = self.list1.currentItem().text()
 
@@ -279,16 +274,16 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         # self.list_parts.setFixedWidth(max_width)
         self.list_parts.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
+    def list_parts_rows_ins(self):
+        if self.list_parts.count() > 0:
+            self.list_parts.setCurrentRow(0)
+
     def list_parts_selected(self):
-        current_item = self.list_parts.currentItem()
-        if current_item:
-            self.active_part_index = self.list_parts.currentRow()
-            self.active_part_name = current_item.text()
-            source_string = self.data[self.active_filename]["content"][self.active_part_index]["content"]
-            self.editor1.setPlainText(source_string)
-            html_string = self.preview_css_str + self.markdowner_simple(source_string)
-            self.view1.setHtml(html_string)
-            # self.view1.scrollToAnchor(part_name)
+        if self.list_parts.currentRow() != -1:
+            current_item = self.list_parts.currentItem()
+            if current_item:
+                source_string = self.data[self.active_filename]["content"][self.list_parts.currentRow()]["content"]
+                self.editor1.setPlainText(source_string)
 
     def reload_changes(self):
         if self.overlay.isVisible():
@@ -297,6 +292,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             self.overlay.show()
 
         self.overlay.setGeometry(QRect(self.finder.pos() + self.finder.rect().bottomLeft(), QSize(400, 200)))
+
+    def click_debug(self):
+        print("  click_debug()")
 
     def resizeEvent(self, e):
         if e.oldSize() != QSize(-1, -1):
@@ -446,7 +444,7 @@ if __name__ == '__main__':
     ex = Example()
 
     app.setStyle("Fusion")
-    print("QtGui.QStyleFactory.keys()", QStyleFactory.keys())
+    # print("QtGui.QStyleFactory.keys()", QStyleFactory.keys())
 
 
     logging.basicConfig(level=logging.INFO,
