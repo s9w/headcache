@@ -11,37 +11,45 @@ class Highlighter(QSyntaxHighlighter):
         self.highlightingRules = []
 
         # parts
-        singleLineCommentFormat = QTextCharFormat()
-        singleLineCommentFormat.setForeground(Qt.red)
-        self.highlightingRules.append((QRegExp("##[^\n]*"),
-                singleLineCommentFormat))
-
-        # italic
-        format_italic = QTextCharFormat()
-        format_italic.setFontItalic(True)
-        self.highlightingRules.append((QRegExp("\*.+\*"), format_italic))
+        format_section = QTextCharFormat()
+        format_section.setForeground(Qt.red)
+        re = QRegExp("##[^\n]*")
+        self.highlightingRules.append((re, format_section))
 
         # bold
         format_bold = QTextCharFormat()
         format_bold.setFontWeight(QFont.Bold)
-        self.highlightingRules.append((QRegExp("\*\*.+\*\*"), format_bold))
+        re = QRegExp("\*\*.+\*\*")
+        re.setMinimal(True)
+        self.highlightingRules.append((re, format_bold))
+
+        # italic
+        format_italic = QTextCharFormat()
+        format_italic.setFontItalic(True)
+        re = QRegExp("\*.+\*")
+        re.setMinimal(True)
+        self.highlightingRules.append((re, format_italic))
 
         # code
         self.format_code = QTextCharFormat()
         self.format_code.setForeground(QColor(255, 100, 100))
-        self.highlightingRules.append((QRegExp("`.+`"), self.format_code))
+        re = QRegExp("`.+`")
+        re.setMinimal(True)
+        self.highlightingRules.append((re, self.format_code))
 
         # multiline code
         self.code_start_expr = QRegExp("```")
         self.code_end_expr = QRegExp("```")
 
     def highlightBlock(self, text):
+        offset = 0
         for pattern, format in self.highlightingRules:
             expression = QRegExp(pattern)
-            index = expression.indexIn(text)
+            index = expression.indexIn(text, offset)
             while index >= 0:
                 length = expression.matchedLength()
                 self.setFormat(index, length, format)
+                offset = index + length
                 index = expression.indexIn(text, index + length)
 
         self.setCurrentBlockState(0)
