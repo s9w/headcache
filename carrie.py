@@ -11,7 +11,7 @@ from PyQt5.QtCore import QSize
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
-                             QPlainTextEdit, QLabel, QLineEdit, QPushButton, QTextBrowser,
+                             QPlainTextEdit, QTextEdit, QLabel, QLineEdit, QPushButton, QTextBrowser,
                              QVBoxLayout, QSplitter)
 from PyQt5.QtWidgets import QListView
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
@@ -203,6 +203,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.left_widget.setMaximumWidth(left_max_width)
 
         self.editor1 = QPlainTextEdit()
+        self.highlighter = Highlighter(self.editor1.document())
         self.editor1.setObjectName("editor")
         self.editor1.textChanged.connect(self.editor_changed)
         # self.editor1.modificationChanged.connect(self.editor_changed)
@@ -284,6 +285,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             if current_item:
                 source_string = self.data[self.active_filename]["content"][self.list_parts.currentRow()]["content"]
                 self.editor1.setPlainText(source_string)
+                # self.editor1.setHtml(source_string)
+                # self.editor1.appendHtml("abc<i>abc</i>")
 
     def reload_changes(self):
         if self.overlay.isVisible():
