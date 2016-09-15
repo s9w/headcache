@@ -98,8 +98,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.data = self.load_data()
 
         # search index
-        filenames = self.data.keys()
-        for filename in filenames:
+        for topic in self.data:
+            filename = topic["filename"]
             file = QFile("data/{}".format(filename))
             if not file.open(QtCore.QIODevice.ReadOnly):
                 print("couldn't open file")
@@ -147,7 +147,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             json.dump(self.config, f, indent=4)
 
     def load_data(self):
-        data_dict = {}
+        data = []
         for filename in QDir("data").entryList(["*.md"], QDir.Files):
             file = QFile("data/{}".format(filename))
             if not file.open(QtCore.QIODevice.ReadOnly):
@@ -156,9 +156,11 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             content = stream.readAll()
             self.block_lexer.clear_ast()
             html = self.markdowner(content)
-            self.block_lexer.ast["html"] = html
-            data_dict[filename] = self.block_lexer.ast
-        return data_dict
+            entry = self.block_lexer.ast
+            entry["html"] = html
+            entry["filename"] = filename
+            data.append(entry)
+        return data
 
     def initUI(self):
         allLayout = QVBoxLayout()
@@ -205,10 +207,14 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.top_controls.setLayout(layout)
 
         self.list1 = QListWidget()
+        self.list1.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.list1.setObjectName("file_list")
-        if self.data:
-            self.list1.addItems(self.data.keys())
-            self.list1.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+
+        for topic in self.data:
+            list_item = QListWidgetItem(topic["title"])
+            list_item.setFlags(list_item.flags() | Qt.ItemIsEditable)
+            self.list1.addItem(list_item)
+
         self.list1.currentItemChanged.connect(self.list_files_changed)
 
         self.list_parts = QListWidget()
@@ -278,7 +284,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
     def update_preview(self):
         # get current text from internal data
-        editor_text = self.data[self.active_filename]["content"][self.list_parts.currentRow()]["content"]
+        editor_text = self.data[self.list1.currentRow()]["content"][self.list_parts.currentRow()]["content"]
 
         # parsing
         self.part_block_lexer.clear_ast()
@@ -290,23 +296,20 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         # update data and part list when part name was edited
         if self.list_parts.currentItem().text() != self.part_block_lexer.ast["title"]:
             self.list_parts.currentItem().setText(self.part_block_lexer.ast["title"])
-            self.data[self.active_filename]["content"][self.list_parts.currentRow()]["title"] = self.part_block_lexer.ast["title"]
+            self.data[self.list1.currentRow()]["content"][self.list_parts.currentRow()]["title"] = self.part_block_lexer.ast["title"]
 
     def editor_changed(self):
         if self.list_parts.currentRow() != -1:
 
             # update internal data
-            self.data[self.active_filename]["content"][self.list_parts.currentRow()]["content"] = self.editor1.toPlainText()
+            self.data[self.list1.currentRow()]["content"][self.list_parts.currentRow()]["content"] = self.editor1.toPlainText()
 
             # update GUI
             self.update_preview()
 
     def list_files_changed(self):
-        # update state
-        self.active_filename = self.list1.currentItem().text()
-
         # update part list
-        part_names = [part["title"] for part in self.data[self.active_filename]["content"]]
+        part_names = [part["title"] for part in self.data[self.list1.currentRow()]["content"]]
 
         self.list_parts.clear()
         self.list_parts.addItems(part_names)
@@ -325,7 +328,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         if self.list_parts.currentRow() != -1:
             current_item = self.list_parts.currentItem()
             if current_item:
-                source_string = self.data[self.active_filename]["content"][self.list_parts.currentRow()]["content"]
+                source_string = self.data[self.list1.currentRow()]["content"][self.list_parts.currentRow()]["content"]
                 self.editor1.setPlainText(source_string)
 
     def reload_changes(self):
