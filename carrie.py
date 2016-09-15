@@ -17,6 +17,8 @@ from PyQt5.QtWidgets import QListView
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
+import whoosh
+import whoosh.highlight
 from whoosh.fields import *
 from whoosh.index import create_in
 from whoosh.qparser import QueryParser
@@ -36,13 +38,14 @@ class QCustomQWidget(QWidget):
 
         self.label = QLabel("test")
         self.label.setObjectName("inner_label")
+        # self.label.setStyleSheet("#match{background-color: red;}")
         allLayout.addWidget(self.label)
 
         # allLayout.setContentsMargins(0,0,0,0)
         self.setLayout(allLayout)
 
     def set_text(self, text):
-        self.label.setText("cont: <b>{}</b>".format(text))
+        self.label.setText(text)
 
 
 class Overlay(QWidget):
@@ -61,17 +64,19 @@ class Overlay(QWidget):
         self.l1 = QListWidget(self)
         self.l1.setObjectName("search_result_list")
         self.l1.setViewMode(QListView.ListMode)
+        allLayout.addWidget(self.l1)
 
-        for t1 in ["t1", "t2", "t3"]:
-            item_widget = QCustomQWidget() #parent)
-            item_widget.set_text(t1)
+        self.setLayout(allLayout)
+
+    def add_search_results(self, items):
+        self.l1.clear()
+        for item_text in items:
+            item_widget = QCustomQWidget()  # parent)
+            item_widget.set_text(item_text)
             item = QListWidgetItem()
             item.setSizeHint(item_widget.sizeHint())
             self.l1.addItem(item)
             self.l1.setItemWidget(item, item_widget)
-        allLayout.addWidget(self.l1)
-
-        self.setLayout(allLayout)
 
 
 class MainWidget(QFrame):  # QDialog #QMainWindow
@@ -99,13 +104,11 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         # search index
         for topic in self.data:
-            filename = topic["filename"]
-            file = QFile("data/{}".format(filename))
-            if not file.open(QtCore.QIODevice.ReadOnly):
-                print("couldn't open file")
-            stream = QtCore.QTextStream(file)
-            content = stream.readAll()
-            self.writer.add_document(path=filename, content=content)
+            for part in topic["content"]:
+                self.writer.add_document(path=topic["filename"], content=part["content"], title=part["title"])
+        # self.writer.add_document(title="performance", content="something bold indeed", tags="tag1 tag2", path="cpp.md")
+        # self.writer.add_document(title="memory", content="a thing about memory", path="cpp.md")
+        # self.writer.add_document(title="conda", content="installing things", path="python.md")
         self.writer.commit()
 
         self.active_filename = ""
@@ -354,15 +357,34 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         with self.ix.searcher() as searcher:
             query = QueryParser("content", self.ix.schema).parse(self.finder.text())
             results = searcher.search(query)
+            results.formatter = Result_formatter_simple()
             result_count = len(results)
-            print("click_search", self.finder.text(), "len: ", result_count)
-            for i in range(result_count):
-                print("result {}: ".format(i), results[i])
-                print(results[i].highlights("content"))
+
+            search_results = [res.highlights("content") for res in results]
+            self.overlay.add_search_results(search_results)
+
+            # for i in range(result_count):
+            #     print("result {}: ".format(i), results[i])
+            #     print(results[i].highlights("content"))
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape:
             self.finder.setFocus()
+
+
+class Result_formatter_simple(whoosh.highlight.Formatter):
+    def __init__(self):
+        pass
+
+    def format_token(self, text, token, replace=False):
+        def get_text(original, token, replace):
+            if replace:
+                return token.text
+            else:
+                return original[token.startchar:token.endchar]
+
+        ttext = whoosh.highlight.htmlescape(get_text(text, token, replace), quote=False)
+        return '<span style="background-color: rgba(150,0,0,150);">{}</span>'.format(ttext)
 
 
 class Example(QMainWindow):
