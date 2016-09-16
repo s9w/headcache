@@ -48,6 +48,22 @@ class QCustomQWidget(QWidget):
         self.label.setText(text)
 
 
+class FileListItem(QWidget):
+    def __init__(self, title: str, filename, parent=None):
+        super(FileListItem, self).__init__(parent)
+        layout = QVBoxLayout()
+        self.label_title = QLabel(title)
+        self.label_filename = QLabel(filename)
+        layout.addWidget(self.label_title)
+        layout.addWidget(self.label_filename)
+        self.label_title.setObjectName("file_list_title")
+        self.label_filename.setObjectName("file_list_filename")
+        layout.setAlignment(self.label_filename, Qt.AlignRight)
+        layout.setContentsMargins(2,2,2,2)
+        layout.setSpacing(0)
+        self.setLayout(layout)
+
+
 class Overlay(QWidget):
     def __init__(self, parent=None):
         QWidget.__init__(self, parent)
@@ -236,9 +252,11 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.list1.setObjectName("file_list")
 
         for topic in self.data:
-            list_item = QListWidgetItem(topic["title"])
-            list_item.setFlags(list_item.flags() | Qt.ItemIsEditable)
-            self.list1.addItem(list_item)
+            item_widget = FileListItem(topic["title"], topic["filename"])
+            item = QListWidgetItem()
+            item.setSizeHint(item_widget.sizeHint())
+            self.list1.addItem(item)
+            self.list1.setItemWidget(item, item_widget)
 
         self.list1.currentItemChanged.connect(self.list_files_changed)
 

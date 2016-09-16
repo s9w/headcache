@@ -49,3 +49,15 @@ QListWidget::item:selected{
 #inner_label{
     color: #f8f8f2;
 }
+
+#file_list_title{
+    color: #f8f8f2;
+}
+
+#file_list_filename{
+    color: rgb(150,150,150);
+}
+
+#match{
+    background-color: red;
+}
