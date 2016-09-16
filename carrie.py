@@ -13,7 +13,7 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
                              QPlainTextEdit, QTextEdit, QLabel, QLineEdit, QPushButton, QTextBrowser,
                              QVBoxLayout, QSplitter, QButtonGroup, QToolButton, QSizePolicy)
-from PyQt5.QtWidgets import QListView
+from PyQt5.QtWidgets import QListView, QStyleFactory
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
@@ -67,6 +67,8 @@ class Overlay(QWidget):
         allLayout.addWidget(self.l1)
 
         self.setLayout(allLayout)
+        # self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
+        # self.setFocusPolicy(Qt.StrongFocus)
 
     def add_search_results(self, items):
         self.l1.clear()
@@ -79,9 +81,21 @@ class Overlay(QWidget):
             self.l1.setItemWidget(item, item_widget)
 
 
+class MySearchBar(QLineEdit):
+    def __init__(self, parent):
+        super(MySearchBar, self).__init__(parent)
+
+    def focusOutEvent(self, QFocusEvent):
+        self.parent().parent().overlay.hide()
+        super().focusOutEvent(QFocusEvent)
+
+    def focusInEvent(self, QFocusEvent):
+        self.parent().parent().overlay.show()
+        super().focusInEvent(QFocusEvent)
+
+
 class MainWidget(QFrame):  # QDialog #QMainWindow
     msg = pyqtSignal(str)
-    # import QSciScintilla
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -119,6 +133,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.config = self.load_config()
         self.initUI()
         self.parent().resize(*self.config["window_size"])
+        self.overlay = Overlay(self)
+        self.overlay.hide()
 
         with open("preview_style.css") as file_style:
             self.preview_css_str = '<style type="text/css">{}</style>'.format(file_style.read())
@@ -129,6 +145,12 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.overlay = Overlay(self)
         self.overlay.hide()
         self.setObjectName("mainframe")
+
+        self.setFocusPolicy(Qt.StrongFocus)
+
+    def showEvent(self, *args, **kwargs):
+        # potentially also on resizeEvent()?
+        self.overlay.setGeometry(QRect(self.finder.pos() + self.finder.rect().bottomLeft(), QSize(400, 200)))
 
     def load_config(self):
         config = {
@@ -204,7 +226,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         bg_layout.setSpacing(0)
         layout.addLayout(bg_layout)
 
-        self.finder = QLineEdit()
+        self.finder = MySearchBar(self)
         layout.addWidget(self.finder)
         layout.setContentsMargins(0,0,0,0)
         self.top_controls.setLayout(layout)
@@ -335,12 +357,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
                 self.editor1.setPlainText(source_string)
 
     def reload_changes(self):
-        if self.overlay.isVisible():
-            self.overlay.hide()
-        else:
-            self.overlay.show()
-
-        self.overlay.setGeometry(QRect(self.finder.pos() + self.finder.rect().bottomLeft(), QSize(400, 200)))
+        pass
 
     def click_debug(self):
         print("  click_debug()")
@@ -403,6 +420,7 @@ class Example(QMainWindow):
         self.statusBar().showMessage('Ready')
 
         self.setWindowTitle("Carrie")
+        self.setStyle(QStyleFactory.create("fusion"))
         self.show()
 
     def closeEvent(self, *args, **kwargs):
@@ -512,9 +530,7 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = Example()
 
-    app.setStyle("Fusion")
     # print("QtGui.QStyleFactory.keys()", QStyleFactory.keys())
-
 
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(message)s',
