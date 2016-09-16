@@ -21,7 +21,7 @@ class Highlighter(QSyntaxHighlighter):
         # bold
         format_bold = QTextCharFormat()
         format_bold.setFontWeight(QFont.Bold)
-        re = QRegExp("\*\*.+\*\*")
+        re = QRegExp("\*\*(?!\*).+\*\*")
         re.setMinimal(True)
         self.highlightingRules.append((re, format_bold))
 
