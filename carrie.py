@@ -12,8 +12,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
                              QPlainTextEdit, QTextEdit, QLabel, QLineEdit, QPushButton, QTextBrowser,
-                             QVBoxLayout, QSplitter, QButtonGroup, QToolButton, QSizePolicy)
-from PyQt5.QtWidgets import QListView, QStyleFactory
+                             QVBoxLayout, QFormLayout, QSplitter, QButtonGroup, QToolButton, QSizePolicy)
+from PyQt5.QtWidgets import QListView, QStyleFactory, QInputDialog, QDialog
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
@@ -47,10 +47,34 @@ class QCustomQWidget(QWidget):
     def set_text(self, text):
         self.label.setText(text)
 
+class FileRenameDialog(QDialog):
+    def __init__(self, title, filename, parent=None):
+        super(FileRenameDialog, self).__init__(parent)
+        layout = QFormLayout()
 
-class FileListItem(QWidget):
+        self.edit_title = QLineEdit(title)
+        layout.addRow(QLabel("Title"), self.edit_title)
+
+        self.edit_filename = QLineEdit(filename)
+        layout.addRow(QLabel("Filename"), self.edit_filename)
+
+        self.button_ok = QPushButton("OK", self)
+        self.button_ok.clicked.connect(self.clicked_ok)
+        layout.addRow(self.button_ok)
+
+        self.setLayout(layout)
+
+    def clicked_ok(self):
+        self.accept()
+
+
+class SearchResultWidget(QWidget):
     def __init__(self, title: str, filename, parent=None):
-        super(FileListItem, self).__init__(parent)
+        super(SearchResultWidget, self).__init__(parent)
+
+        self.real_parent = parent
+        # self.index = index
+
         layout = QVBoxLayout()
         self.label_title = QLabel(title)
         self.label_filename = QLabel(filename)
@@ -62,6 +86,19 @@ class FileListItem(QWidget):
         layout.setContentsMargins(2,2,2,2)
         layout.setSpacing(0)
         self.setLayout(layout)
+
+    def get_title(self):
+        return self.label_title.text()
+
+    def get_filename(self):
+        return self.label_filename.text()
+
+    def mouseDoubleClickEvent(self, QMouseEvent):
+        # super().mouseDoubleClickEvent(QMouseEvent)
+        dialog = FileRenameDialog(self.label_title.text(), self.label_filename.text())
+        if dialog.exec_():
+            if self.label_title.text() != dialog.edit_title.text():
+                self.real_parent.change_file_title(dialog.edit_title.text())
 
 
 class Overlay(QWidget):
@@ -133,9 +170,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.data = self.load_data()
 
         # search index
-        for topic in self.data:
+        for filename, topic in self.data.items():
             for part in topic["content"]:
-                self.writer.add_document(path=topic["filename"], content=part["content"], title=part["title"])
+                self.writer.add_document(path=filename, content=part["content"], title=part["title"])
         # self.writer.add_document(title="performance", content="something bold indeed", tags="tag1 tag2", path="cpp.md")
         # self.writer.add_document(title="memory", content="a thing about memory", path="cpp.md")
         # self.writer.add_document(title="conda", content="installing things", path="python.md")
@@ -188,7 +225,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             json.dump(self.config, f, indent=4)
 
     def load_data(self):
-        data = []
+        data = {}
         for filename in QDir("data").entryList(["*.md"], QDir.Files):
             file = QFile("data/{}".format(filename))
             if not file.open(QtCore.QIODevice.ReadOnly):
@@ -199,9 +236,15 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             html = self.markdowner(content)
             entry = self.block_lexer.ast
             entry["html"] = html
-            entry["filename"] = filename
-            data.append(entry)
+            data[filename] = entry
         return data
+
+    def change_file_title(self, title_new):
+        filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
+        self.data[filename]["title"] = title_new
+        # self.data[filename] = self.data.pop(filename)
+        self.list1.clear()
+        self.fill_filename_list()
 
     def initUI(self):
         allLayout = QVBoxLayout()
@@ -247,16 +290,11 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         layout.setContentsMargins(0,0,0,0)
         self.top_controls.setLayout(layout)
 
-        self.list1 = QListWidget()
+        self.list1 = QListWidget(self)
         self.list1.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.list1.setObjectName("file_list")
 
-        for topic in self.data:
-            item_widget = FileListItem(topic["title"], topic["filename"])
-            item = QListWidgetItem()
-            item.setSizeHint(item_widget.sizeHint())
-            self.list1.addItem(item)
-            self.list1.setItemWidget(item, item_widget)
+        self.fill_filename_list()
 
         self.list1.currentItemChanged.connect(self.list_files_changed)
 
@@ -313,6 +351,14 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         allLayout.addWidget(self.splitter, stretch=1)
         self.setLayout(allLayout)
 
+    def fill_filename_list(self):
+        for filename, topic in sorted(self.data.items(), key=lambda k: k[1]["title"]):
+            item_widget = SearchResultWidget(topic["title"], filename, self)
+            item = QListWidgetItem()
+            item.setSizeHint(item_widget.sizeHint())
+            self.list1.addItem(item)
+            self.list1.setItemWidget(item, item_widget)
+
     def click_mode(self):
         sender = self.sender()
         if sender == self.button_edit:
@@ -327,7 +373,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
     def update_preview(self):
         # get current text from internal data
-        editor_text = self.data[self.list1.currentRow()]["content"][self.list_parts.currentRow()]["content"]
+        filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
+        editor_text = self.data[filename]["content"][self.list_parts.currentRow()]["content"]
 
         # parsing
         self.part_block_lexer.clear_ast()
@@ -339,47 +386,53 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         # update data and part list when part name was edited
         if self.list_parts.currentItem().text() != self.part_block_lexer.ast["title"]:
             self.list_parts.currentItem().setText(self.part_block_lexer.ast["title"])
-            self.data[self.list1.currentRow()]["content"][self.list_parts.currentRow()]["title"] = self.part_block_lexer.ast["title"]
+            self.data[filename]["content"][self.list_parts.currentRow()]["title"] = self.part_block_lexer.ast["title"]
 
     def editor_changed(self):
-        if self.list_parts.currentRow() != -1:
-
+        if self.list1.currentRow() != -1 and self.list_parts.currentRow() != -1:
+            filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
             # update internal data
-            self.data[self.list1.currentRow()]["content"][self.list_parts.currentRow()]["content"] = self.editor1.toPlainText()
+            self.data[filename]["content"][self.list_parts.currentRow()]["content"] = self.editor1.toPlainText()
 
             # update GUI
             self.update_preview()
 
-    def list_files_changed(self):
-        # update part list
-        part_names = [part["title"] for part in self.data[self.list1.currentRow()]["content"]]
+    def list_files_changed(self, QListWidgetItem):
+        print("list_files_changed()")
+        is_cleared = QListWidgetItem is None
 
-        self.list_parts.clear()
-        self.list_parts.addItems(part_names)
-        max_width = self.list_parts.sizeHintForColumn(0) + self.list_parts.frameWidth() * 2
-        max_width = 80
-        # self.list_parts.setMaximumWidth(max_width)
-        # self.list_parts.sizehint(max_width)
-        # self.list_parts.setFixedWidth(max_width)
-        self.list_parts.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        if not is_cleared:
+            print("list_files_changed()", QListWidgetItem)
+            filename = self.list1.itemWidget(QListWidgetItem).get_filename()
+            part_names = [part["title"] for part in self.data[filename]["content"]]
+
+            self.list_parts.clear()
+            self.list_parts.addItems(part_names)
+            max_width = self.list_parts.sizeHintForColumn(0) + self.list_parts.frameWidth() * 2
+            max_width = 80
+            # self.list_parts.setMaximumWidth(max_width)
+            # self.list_parts.sizehint(max_width)
+            # self.list_parts.setFixedWidth(max_width)
+            self.list_parts.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
     def list_parts_rows_ins(self):
+        print("list_parts_rows_ins")
         if self.list_parts.count() > 0:
             self.list_parts.setCurrentRow(0)
 
-    def list_parts_selected(self):
+    def list_parts_selected(self, QListWidgetItem):
+        filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
         if self.list_parts.currentRow() != -1:
             current_item = self.list_parts.currentItem()
             if current_item:
-                source_string = self.data[self.list1.currentRow()]["content"][self.list_parts.currentRow()]["content"]
+                source_string = self.data[filename]["content"][self.list_parts.currentRow()]["content"]
                 self.editor1.setPlainText(source_string)
 
     def reload_changes(self):
         pass
 
     def click_debug(self):
-        print("  click_debug()")
-        self.view1.hide()
+        pass
 
     def resizeEvent(self, e):
         if e.oldSize() != QSize(-1, -1):
