@@ -54,6 +54,10 @@ QListWidget::item:selected{
     color: #f8f8f2;
 }
 
+#file_list_title[modified=true]{
+    color: red;
+}
+
 #file_list_filename{
     color: rgb(150,150,150);
 }

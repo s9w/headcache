@@ -9,7 +9,7 @@ from PyQt5.QtCore import QDir, pyqtSignal, QFile
 from PyQt5.QtCore import QRect
 from PyQt5.QtCore import QSize
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QPalette
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
                              QPlainTextEdit, QTextEdit, QLabel, QLineEdit, QPushButton, QTextBrowser,
                              QVBoxLayout, QFormLayout, QSplitter, QButtonGroup, QToolButton, QSizePolicy)
@@ -92,6 +92,12 @@ class SearchResultWidget(QWidget):
 
     def get_filename(self):
         return self.label_filename.text()
+
+    def set_modified(self, mod):
+        self.label_title.setProperty("modified", mod)
+
+        self.label_title.style().unpolish(self.label_title)
+        self.label_title.style().polish(self.label_title)
 
     def mouseDoubleClickEvent(self, QMouseEvent):
         # super().mouseDoubleClickEvent(QMouseEvent)
@@ -193,7 +199,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             self.preview_css_str = '<style type="text/css">{}</style>'.format(file_style.read())
 
         if self.data:
+            old_state = self.editor1.blockSignals(True)
             self.list1.setCurrentRow(0)
+            self.editor1.blockSignals(old_state)
 
         self.overlay = Overlay(self)
         self.overlay.hide()
@@ -236,6 +244,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             html = self.markdowner(content)
             entry = self.block_lexer.ast
             entry["html"] = html
+            entry["modified"] = False
             data[filename] = entry
         return data
 
@@ -395,8 +404,12 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     def editor_changed(self):
         if self.list1.currentRow() != -1 and self.list_parts.currentRow() != -1:
             filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
+
             # update internal data
             self.data[filename]["content"][self.list_parts.currentRow()]["content"] = self.editor1.toPlainText()
+            self.data[filename]["modified"] = True
+
+            self.list1.itemWidget(self.list1.currentItem()).set_modified(True)
 
             # update GUI
             self.update_preview()
@@ -427,7 +440,11 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             current_item = self.list_parts.currentItem()
             if current_item:
                 source_string = self.data[filename]["content"][self.list_parts.currentRow()]["content"]
+
+                old_state = self.editor1.blockSignals(True)
                 self.editor1.setPlainText(source_string)
+                self.editor1.blockSignals(old_state)
+
 
     def reload_changes(self):
         pass
