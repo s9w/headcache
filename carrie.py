@@ -244,7 +244,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.data[filename]["title"] = title_new
         # self.data[filename] = self.data.pop(filename)
         self.list1.clear()
-        self.fill_filename_list()
+        title_index_dict = self.fill_filename_list()
+        self.list1.setCurrentRow(title_index_dict[title_new])
 
     def initUI(self):
         allLayout = QVBoxLayout()
@@ -352,12 +353,15 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.setLayout(allLayout)
 
     def fill_filename_list(self):
-        for filename, topic in sorted(self.data.items(), key=lambda k: k[1]["title"]):
+        title_index_dict = {}
+        for i, (filename, topic) in enumerate(sorted(self.data.items(), key=lambda k: k[1]["title"])):
             item_widget = SearchResultWidget(topic["title"], filename, self)
             item = QListWidgetItem()
             item.setSizeHint(item_widget.sizeHint())
             self.list1.addItem(item)
             self.list1.setItemWidget(item, item_widget)
+            title_index_dict[topic["title"]] = i
+        return title_index_dict
 
     def click_mode(self):
         sender = self.sender()
@@ -398,11 +402,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             self.update_preview()
 
     def list_files_changed(self, QListWidgetItem):
-        print("list_files_changed()")
         is_cleared = QListWidgetItem is None
 
         if not is_cleared:
-            print("list_files_changed()", QListWidgetItem)
             filename = self.list1.itemWidget(QListWidgetItem).get_filename()
             part_names = [part["title"] for part in self.data[filename]["content"]]
 
@@ -416,7 +418,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             self.list_parts.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
     def list_parts_rows_ins(self):
-        print("list_parts_rows_ins")
         if self.list_parts.count() > 0:
             self.list_parts.setCurrentRow(0)
 
