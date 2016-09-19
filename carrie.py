@@ -47,6 +47,7 @@ class QCustomQWidget(QWidget):
     def set_text(self, text):
         self.label.setText(text)
 
+
 class FileRenameDialog(QDialog):
     def __init__(self, title, filename, parent=None):
         super(FileRenameDialog, self).__init__(parent)
@@ -83,7 +84,7 @@ class SearchResultWidget(QWidget):
         self.label_title.setObjectName("file_list_title")
         self.label_filename.setObjectName("file_list_filename")
         layout.setAlignment(self.label_filename, Qt.AlignRight)
-        layout.setContentsMargins(2,2,2,2)
+        layout.setContentsMargins(2, 2, 2, 2)
         layout.setSpacing(0)
         self.setLayout(layout)
 
@@ -99,7 +100,7 @@ class SearchResultWidget(QWidget):
         self.label_title.style().unpolish(self.label_title)
         self.label_title.style().polish(self.label_title)
 
-    def mouseDoubleClickEvent(self, QMouseEvent):
+    def mouseDoubleClickEvent(self, mouse_event):
         # super().mouseDoubleClickEvent(QMouseEvent)
         dialog = FileRenameDialog(self.label_title.text(), self.label_filename.text())
         if dialog.exec_():
@@ -144,13 +145,13 @@ class MySearchBar(QLineEdit):
     def __init__(self, parent):
         super(MySearchBar, self).__init__(parent)
 
-    def focusOutEvent(self, QFocusEvent):
+    def focusOutEvent(self, focus_event):
         self.parent().parent().overlay.hide()
-        super().focusOutEvent(QFocusEvent)
+        super().focusOutEvent(focus_event)
 
-    def focusInEvent(self, QFocusEvent):
+    def focusInEvent(self, focus_event):
         self.parent().parent().overlay.show()
-        super().focusInEvent(QFocusEvent)
+        super().focusInEvent(focus_event)
 
 
 class MainWidget(QFrame):  # QDialog #QMainWindow
@@ -199,9 +200,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             self.preview_css_str = '<style type="text/css">{}</style>'.format(file_style.read())
 
         if self.data:
-            old_state = self.editor1.blockSignals(True)
             self.list1.setCurrentRow(0)
-            self.editor1.blockSignals(old_state)
 
         self.overlay = Overlay(self)
         self.overlay.hide()
@@ -414,16 +413,16 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             # update GUI
             self.update_preview()
 
-    def list_files_changed(self, QListWidgetItem):
-        is_cleared = QListWidgetItem is None
+    def list_files_changed(self, list_widget_item):
+        is_cleared = list_widget_item is None
 
         if not is_cleared:
-            filename = self.list1.itemWidget(QListWidgetItem).get_filename()
+            filename = self.list1.itemWidget(list_widget_item).get_filename()
             part_names = [part["title"] for part in self.data[filename]["content"]]
 
             self.list_parts.clear()
             self.list_parts.addItems(part_names)
-            max_width = self.list_parts.sizeHintForColumn(0) + self.list_parts.frameWidth() * 2
+            # max_width = self.list_parts.sizeHintForColumn(0) + self.list_parts.frameWidth() * 2
             max_width = 80
             # self.list_parts.setMaximumWidth(max_width)
             # self.list_parts.sizehint(max_width)
@@ -434,7 +433,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         if self.list_parts.count() > 0:
             self.list_parts.setCurrentRow(0)
 
-    def list_parts_selected(self, QListWidgetItem):
+    def list_parts_selected(self, list_widget_item):
         filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
         if self.list_parts.currentRow() != -1:
             current_item = self.list_parts.currentItem()
@@ -443,6 +442,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
                 old_state = self.editor1.blockSignals(True)
                 self.editor1.setPlainText(source_string)
+                self.update_preview()
                 self.editor1.blockSignals(old_state)
 
 
@@ -450,7 +450,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         pass
 
     def click_debug(self):
-        pass
+        print("debug")
 
     def resizeEvent(self, e):
         if e.oldSize() != QSize(-1, -1):
