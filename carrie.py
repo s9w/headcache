@@ -24,6 +24,7 @@ from whoosh.index import create_in
 from whoosh.qparser import QueryParser
 
 from highlighter import Highlighter
+from difflib import Differ
 
 
 class IdRenderer(mistune.Renderer):
@@ -260,9 +261,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         self.top_controls = QWidget()
         layout = QHBoxLayout()
-        button1 = QPushButton("reload")
-        button1.clicked.connect(self.reload_changes)
-        layout.addWidget(button1)
+        button_save = QPushButton("save")
+        button_save.clicked.connect(self.clicked_save)
+        layout.addWidget(button_save)
 
         button2 = QPushButton("search")
         button2.clicked.connect(self.click_search)
@@ -446,8 +447,26 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
                 self.editor1.blockSignals(old_state)
 
 
-    def reload_changes(self):
-        pass
+    def clicked_save(self):
+        filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
+        item = self.data[filename]
+
+        # build string from internal data
+        content_new = "# {}\n".format(item["title"])
+        for v in item["content"]:
+            content_new += "\n" + v["content"].strip() + "\n"
+        content_new = content_new.replace("\n", "\r\n")
+
+        # write string to disk
+        file_write = QFile("data/{}".format(filename))
+        if not file_write.open(QtCore.QIODevice.WriteOnly):
+            print("couldn't open file")
+        stream = QtCore.QTextStream(file_write)
+        stream << content_new
+        file_write.close()
+
+        # mark unmodified
+        self.list1.itemWidget(self.list1.currentItem()).set_modified(False)
 
     def click_debug(self):
         print("debug")
