@@ -256,6 +256,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         title_index_dict = self.fill_filename_list()
         self.list1.setCurrentRow(title_index_dict[title_new])
 
+        # mark file with changed title as modified
+        self.list1.itemWidget(self.list1.currentItem()).set_modified(True)
+
     def initUI(self):
         allLayout = QVBoxLayout()
 
