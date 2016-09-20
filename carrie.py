@@ -218,7 +218,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             "window_size": [800, 400],
             "editor_font": "Source Code Pro",
             "editor_font_size": 10,
-            "editor_font_size_section": 14
+            "editor_font_size_section": 10
         }
 
         try:
@@ -272,10 +272,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         button2.clicked.connect(self.click_search)
         layout.addWidget(button2)
 
-        button_debug = QPushButton("debug")
-        button_debug.clicked.connect(self.click_debug)
-        layout.addWidget(button_debug)
-
         # mode buttons
         def create_mode_button(icon_hint):
             button = QPushButton()
@@ -312,11 +308,13 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.fill_filename_list()
 
         self.list1.currentItemChanged.connect(self.list_files_changed)
+        self.list1.mouseDoubleClickEvent = self.list_files_dblclicked
 
         self.list_parts = QListWidget()
         self.list_parts.setObjectName("part_list")
         self.list_parts.model().rowsInserted.connect(self.list_parts_rows_ins)
         self.list_parts .currentItemChanged.connect(self.list_parts_selected)
+        self.list_parts.mouseDoubleClickEvent = self.list_parts_dblclicked
 
         self.button_left_add = QPushButton("+")
         self.button_left_add.setMaximumWidth(self.button_left_add.sizeHint().height())
@@ -437,6 +435,12 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             # self.list_parts.setFixedWidth(max_width)
             self.list_parts.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
+    def list_files_dblclicked(self, mouse_event):
+        print("list_files_dblclicked()")
+
+    def list_parts_dblclicked(self, mouse_event):
+        print("list_parts_dblclicked()", mouse_event)
+
     def list_parts_rows_ins(self):
         if self.list_parts.count() > 0:
             self.list_parts.setCurrentRow(0)
@@ -474,9 +478,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         # mark unmodified
         self.list1.itemWidget(self.list1.currentItem()).set_modified(False)
-
-    def click_debug(self):
-        print("debug")
 
     def resizeEvent(self, e):
         if e.oldSize() != QSize(-1, -1):
@@ -537,6 +538,7 @@ class Example(QMainWindow):
 
         self.setWindowTitle("Carrie")
         self.setStyle(QStyleFactory.create("fusion"))
+        print("stle", self.style())
         self.show()
 
     def closeEvent(self, *args, **kwargs):

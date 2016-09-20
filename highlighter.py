@@ -10,32 +10,25 @@ class Highlighter(QSyntaxHighlighter):
         super(Highlighter, self).__init__(parent)
         self.highlightingRules = []
 
-        # parts
-        self.format_section = QTextCharFormat()
-        self.format_section.setFontWeight(QFont.Bold)
-        self.format_section.setForeground(Qt.red)
-        # self.format_section.setFontPointSize(20)
-        re = QRegExp("##[^\n]*")
-        self.highlightingRules.append((re, self.format_section))
+        # italic
+        format_italic = QTextCharFormat()
+        format_italic.setFontItalic(True)
+        # format_italic.setForeground(QColor(255,150,150))
+        re = QRegExp("\*(?!\*).+\*(?!\*)")
+        re.setMinimal(True)
+        self.highlightingRules.append((re, format_italic))
 
         # bold
         format_bold = QTextCharFormat()
         format_bold.setFontWeight(QFont.Bold)
+        format_bold.setFontItalic(False)
         re = QRegExp("\*\*(?!\*).+\*\*")
         re.setMinimal(True)
         self.highlightingRules.append((re, format_bold))
 
-        # italic
-        format_italic = QTextCharFormat()
-        format_italic.setFontItalic(True)
-        format_italic.setForeground(QColor(255,150,150))
-        re = QRegExp("\*.+\*")
-        re.setMinimal(True)
-        self.highlightingRules.append((re, format_italic))
-
         # code
         self.format_code = QTextCharFormat()
-        self.format_code.setForeground(QColor(255, 100, 100))
+        self.format_code.setForeground(QColor(0, 255, 0))
         re = QRegExp("`.+`")
         re.setMinimal(True)
         self.highlightingRules.append((re, self.format_code))
@@ -44,6 +37,15 @@ class Highlighter(QSyntaxHighlighter):
         self.code_start_expr = QRegExp("```")
         self.code_end_expr = QRegExp("```")
 
+        # parts
+        self.format_section = QTextCharFormat()
+        # self.format_section.FontPropertiesInheritanceBehavior = QTextCharFormat.FontPropertiesSpecifiedOnly
+        self.format_section.setFontWeight(QFont.Bold)
+        self.format_section.setForeground(Qt.red)
+        # self.format_section.setFontPointSize(20)
+        re = QRegExp("##[^\n]*")
+        self.highlightingRules.append((re, self.format_section))
+
     def set_section_size(self, size):
         self.format_section.setFontPointSize(size)
 
@@ -51,7 +53,7 @@ class Highlighter(QSyntaxHighlighter):
         offset = 0
         for pattern, format in self.highlightingRules:
             expression = QRegExp(pattern)
-            index = expression.indexIn(text, offset)
+            index = expression.indexIn(text, 0*offset)
             while index >= 0:
                 length = expression.matchedLength()
                 self.setFormat(index, length, format)
@@ -83,8 +85,7 @@ class Highlighter(QSyntaxHighlighter):
             else:
                 commentLength = endIndex - startIndex + self.code_end_expr.matchedLength()
 
-            self.setFormat(startIndex, commentLength,
-                           self.format_code)
+            self.setFormat(startIndex, commentLength, self.format_code)
 
             # potentially multiple block comments in one block (line)
             startIndex = self.code_start_expr.indexIn(text, startIndex + commentLength)
