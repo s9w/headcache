@@ -9,7 +9,7 @@ from PyQt5.QtCore import QDir, pyqtSignal, QFile
 from PyQt5.QtCore import QRect
 from PyQt5.QtCore import QSize
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QPalette
+from PyQt5.QtGui import QFont, QPalette, QIcon
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
                              QPlainTextEdit, QTextEdit, QLabel, QLineEdit, QPushButton, QTextBrowser,
                              QVBoxLayout, QFormLayout, QSplitter, QButtonGroup, QToolButton, QSizePolicy)
@@ -24,7 +24,6 @@ from whoosh.index import create_in
 from whoosh.qparser import QueryParser
 
 from highlighter import Highlighter
-from difflib import Differ
 
 
 class IdRenderer(mistune.Renderer):
@@ -65,6 +64,7 @@ class FileRenameDialog(QDialog):
         layout.addRow(self.button_ok)
 
         self.setLayout(layout)
+        self.edit_title.setFocus(Qt.TabFocusReason)
 
     def clicked_ok(self):
         self.accept()
@@ -277,20 +277,22 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         layout.addWidget(button_debug)
 
         # mode buttons
-        self.button_edit = QPushButton("E")
-        self.button_both = QPushButton("EV")
-        self.button_view = QPushButton("V")
-        self.button_edit.clicked.connect(self.click_mode)
-        self.button_both.clicked.connect(self.click_mode)
-        self.button_view.clicked.connect(self.click_mode)
-        self.button_edit.setCheckable(True)
-        self.button_both.setCheckable(True)
-        self.button_view.setCheckable(True)
-        self.button_both.setChecked(True)
+        def create_mode_button(icon_hint):
+            button = QPushButton()
+            button_icon = QIcon("gfx/icon_mode_{}.png".format(icon_hint))
+            button.setIcon(button_icon)
+            button.setIconSize(QSize(30, 20))
+            button.clicked.connect(self.click_mode)
+            button.setCheckable(True)
+            self.bg.addButton(button)
+            return button
+
         self.bg = QButtonGroup()
-        self.bg.addButton(self.button_edit)
-        self.bg.addButton(self.button_both)
-        self.bg.addButton(self.button_view)
+        self.button_edit = create_mode_button("e")
+        self.button_both = create_mode_button("ev")
+        self.button_view = create_mode_button("v")
+
+        self.button_both.setChecked(True)
         bg_layout = QHBoxLayout()
         bg_layout.addWidget(self.button_edit)
         bg_layout.addWidget(self.button_both)
