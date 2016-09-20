@@ -8,13 +8,19 @@ QLineEdit{
 	color: #f8f8f2;
 }
 
+#part_list{
+    border-left: 1px solid gray;
+    border-right: 1px solid gray;
+}
+
 QStatusBar{
-    background-color: #5a5a5a;
+    background-color: #595959;
     color: #f8f8f2;
+    border-top: 1px solid #7d7d7d;
 }
 
 QListWidget{
-	border: 1px solid gray;
+    border: 0;
 }
 
 QListWidget::item{
@@ -26,11 +32,12 @@ QListWidget::item:selected{
 }
 
 #editor{
-	border: 1px solid gray;
+    border: 0;
+    border-right: 1px dashed gray;
 }
 
 #preview{
-	border: 1px solid gray;
+    border: 0;
 }
 
 #search_result_list{

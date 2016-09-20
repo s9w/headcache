@@ -7,7 +7,7 @@ import mistune
 from PyQt5 import QtCore
 from PyQt5.QtCore import QDir, pyqtSignal, QFile
 from PyQt5.QtCore import QRect
-from PyQt5.QtCore import QSize
+from PyQt5.QtCore import QSize, QMargins
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPalette, QIcon
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
@@ -31,9 +31,9 @@ class IdRenderer(mistune.Renderer):
         return '<h{0} id="{1}">{1}</h{0}>\n'.format(level, text)
 
 
-class QCustomQWidget(QWidget):
+class SearchresultWidget(QWidget):
     def __init__(self, parent=None):
-        super(QCustomQWidget, self).__init__(parent)
+        super(SearchresultWidget, self).__init__(parent)
         allLayout = QVBoxLayout()
 
         self.label = QLabel("test")
@@ -70,9 +70,9 @@ class FileRenameDialog(QDialog):
         self.accept()
 
 
-class SearchResultWidget(QWidget):
+class FileListItemWidget(QWidget):
     def __init__(self, title: str, filename, parent=None):
-        super(SearchResultWidget, self).__init__(parent)
+        super(FileListItemWidget, self).__init__(parent)
 
         self.real_parent = parent
         # self.index = index
@@ -134,7 +134,7 @@ class Overlay(QWidget):
     def add_search_results(self, items):
         self.l1.clear()
         for item_text in items:
-            item_widget = QCustomQWidget()  # parent)
+            item_widget = SearchresultWidget()  # parent)
             item_widget.set_text(item_text)
             item = QListWidgetItem()
             item.setSizeHint(item_widget.sizeHint())
@@ -302,7 +302,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         self.finder = MySearchBar(self)
         layout.addWidget(self.finder)
-        layout.setContentsMargins(0,0,0,0)
+        layout.setContentsMargins(5,0,5,0)
         self.top_controls.setLayout(layout)
 
         self.list1 = QListWidget(self)
@@ -332,6 +332,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         # left_max_width = self.list1.sizeHintForColumn(0) + self.list1.frameWidth() * 2
         left_max_width = 100
         self.left_widget.setMaximumWidth(left_max_width)
+        self.list1.setResizeMode(QListView.Adjust)
 
         self.editor1 = QPlainTextEdit()
         self.highlighter = Highlighter(self.editor1.document())
@@ -364,12 +365,13 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         allLayout.addWidget(self.top_controls, stretch=0)
         allLayout.addWidget(self.splitter, stretch=1)
+        allLayout.setContentsMargins(0, 5, 0, 0)
         self.setLayout(allLayout)
 
     def fill_filename_list(self):
         title_index_dict = {}
         for i, (filename, topic) in enumerate(sorted(self.data.items(), key=lambda k: k[1]["title"])):
-            item_widget = SearchResultWidget(topic["title"], filename, self)
+            item_widget = FileListItemWidget(topic["title"], filename, self)
             item = QListWidgetItem()
             item.setSizeHint(item_widget.sizeHint())
             self.list1.addItem(item)
@@ -531,6 +533,7 @@ class Example(QMainWindow):
         with open("style.qss") as file_style:
             self.setStyleSheet(file_style.read())
         self.statusBar().showMessage('Ready')
+        self.statusBar().setMaximumHeight(18)
 
         self.setWindowTitle("Carrie")
         self.setStyle(QStyleFactory.create("fusion"))
