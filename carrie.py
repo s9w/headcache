@@ -85,7 +85,7 @@ class FileListItemWidget(QWidget):
         self.label_title.setObjectName("file_list_title")
         self.label_filename.setObjectName("file_list_filename")
         layout.setAlignment(self.label_filename, Qt.AlignRight)
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(2, 0, 2, 2)
         layout.setSpacing(0)
         self.setLayout(layout)
 
@@ -193,6 +193,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         # setup GUI
         self.config = self.load_config()
         self.initUI()
+        self.old_sizes = self.splitter.sizes()
+        self.ev_ratio = self.get_ev_ratio()
         self.parent().resize(*self.config["window_size"])
         self.overlay = Overlay(self)
         self.overlay.hide()
@@ -209,11 +211,15 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         self.setFocusPolicy(Qt.StrongFocus)
 
-    def showEvent(self, *args, **kwargs):
+    # immediately before they are shown
+    def showEvent(self, event):
+        self.old_sizes = self.splitter.sizes()
+        self.ev_ratio = self.get_ev_ratio()
         # potentially also on resizeEvent()?
         self.overlay.setGeometry(QRect(self.finder.pos() + self.finder.rect().bottomLeft(), QSize(400, 200)))
 
-    def load_config(self):
+    @staticmethod
+    def load_config():
         config = {
             "window_size": [800, 400],
             "editor_font": "Source Code Pro",
@@ -360,6 +366,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.splitter.setStretchFactor(1, 0)
         self.splitter.setStretchFactor(2, 1)
         self.splitter.setStretchFactor(3, 1)
+        self.splitter.splitterMoved.connect(self.splitter_res_ev)
 
         allLayout.addWidget(self.top_controls, stretch=0)
         allLayout.addWidget(self.splitter, stretch=1)
@@ -376,6 +383,33 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             self.list1.setItemWidget(item, item_widget)
             title_index_dict[topic["title"]] = i
         return title_index_dict
+
+    def get_ev_ratio(self):
+        return self.splitter.sizes()[2] / (self.splitter.sizes()[2] + self.splitter.sizes()[3])
+
+    def splitter_res_ev(self, pos, index):
+        # between the lists
+        if index == 1:
+            moved_amount = self.splitter.sizes()[0] - self.old_sizes[0]
+            if moved_amount != 0:
+                old_state = self.splitter.blockSignals(True)
+                self.splitter.moveSplitter(self.old_sizes[0] + self.old_sizes[1] + moved_amount, 2)
+                self.splitter.blockSignals(old_state)
+
+        # not the divider between editor and preview
+        if index in [1, 2]:
+            old_state = self.splitter.blockSignals(True)
+            ev_left_start = sum(self.splitter.sizes()[:2])
+            space_left = self.splitter.width() - ev_left_start
+            ev_divider_pos = ev_left_start + self.ev_ratio*space_left
+            self.splitter.moveSplitter(ev_divider_pos, 3)
+            self.splitter.blockSignals(old_state)
+
+        # divider between editor and preview
+        if index == 3:
+            self.ev_ratio = self.get_ev_ratio()
+
+        self.old_sizes = self.splitter.sizes()
 
     def click_mode(self):
         sender = self.sender()
@@ -538,7 +572,6 @@ class Example(QMainWindow):
 
         self.setWindowTitle("Carrie")
         self.setStyle(QStyleFactory.create("fusion"))
-        print("stle", self.style())
         self.show()
 
     def closeEvent(self, *args, **kwargs):
