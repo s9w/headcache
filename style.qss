@@ -9,8 +9,8 @@ QLineEdit{
 }
 
 #part_list{
-    border-left: 1px solid gray;
-    border-right: 1px solid gray;
+    /*border-left: 1px solid gray;*/
+    /*border-right: 1px solid gray;*/
 }
 
 QStatusBar{
@@ -31,13 +31,33 @@ QListWidget::item:selected{
     background-color: #444444;
 }
 
+QPushButton{
+    /*border: none;*/
+    /*margin: 0;*/
+    /*outline: none;*/
+    /*border-width: 0px;*/
+    /*border-radius: 5px;*/
+}
+
+#splitter_lists_working::handle {
+    background: gray;
+}
+#splitter_lists_working::handle:hover {
+    background: orange;
+}
+#splitter_lists_working::handle:pressed {
+    background: red;
+}
+
 #editor{
     border: 0;
-    border-right: 1px dashed gray;
+    /*border-right: 1px dashed gray;*/
+    selection-background-color: #333333;
 }
 
 #preview{
     border: 0;
+    selection-background-color: #333333;
 }
 
 #search_result_list{

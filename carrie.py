@@ -356,7 +356,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.editor1.setFont(font)
 
         self.splitter = QSplitter()
-        self.splitter.setHandleWidth(0)
+        self.splitter.setObjectName("splitter_lists_working")
+        self.splitter.setHandleWidth(1)
         self.splitter.addWidget(self.left_widget)
         self.splitter.addWidget(self.list_parts)
         self.splitter.addWidget(self.editor1)
@@ -388,19 +389,23 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         return self.splitter.sizes()[2] / (self.splitter.sizes()[2] + self.splitter.sizes()[3])
 
     def splitter_res_ev(self, pos, index):
-        # between the lists
+        # pos = new (sizes + handleWidths)
+        # print(index, pos, self.splitter.handleWidth(), self.splitter.sizes(), sum(self.splitter.sizes()), self.old_sizes, sum(self.old_sizes), self.width())
+
+        # leftmost; between the lists
         if index == 1:
             moved_amount = self.splitter.sizes()[0] - self.old_sizes[0]
             if moved_amount != 0:
                 old_state = self.splitter.blockSignals(True)
-                self.splitter.moveSplitter(self.old_sizes[0] + self.old_sizes[1] + moved_amount, 2)
+                pos_second_old = self.old_sizes[0] + self.old_sizes[1] + self.splitter.handleWidth()
+                self.splitter.moveSplitter(pos_second_old + moved_amount, 2)
                 self.splitter.blockSignals(old_state)
 
         # not the divider between editor and preview
         if index in [1, 2]:
             old_state = self.splitter.blockSignals(True)
-            ev_left_start = sum(self.splitter.sizes()[:2])
-            space_left = self.splitter.width() - ev_left_start
+            ev_left_start = sum(self.splitter.sizes()[:2]) + 2*self.splitter.handleWidth()
+            space_left = self.splitter.width() - self.splitter.handleWidth() - ev_left_start
             ev_divider_pos = ev_left_start + self.ev_ratio*space_left
             self.splitter.moveSplitter(ev_divider_pos, 3)
             self.splitter.blockSignals(old_state)
