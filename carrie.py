@@ -5,23 +5,18 @@ import os.path
 
 import mistune
 from PyQt5 import QtCore
-from PyQt5.QtCore import QDir, pyqtSignal, QFile
-from PyQt5.QtCore import QRect
-from PyQt5.QtCore import QSize, QMargins
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QPalette, QIcon
-from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
-                             QPlainTextEdit, QTextEdit, QLabel, QLineEdit, QPushButton, QTextBrowser,
-                             QVBoxLayout, QFormLayout, QSplitter, QButtonGroup, QToolButton, QSizePolicy)
-from PyQt5.QtWidgets import QListView, QStyleFactory, QInputDialog, QDialog
-from PyQt5.QtWidgets import QListWidget, QListWidgetItem
+from PyQt5.QtCore import QIODevice, QTextStream, pyqtSignal, QDir, QFile, QSize, Qt, QRect
+# from QtCore.Qt import ScrollBarAlwaysOff
+# from QtCore import QtCore.Qt.ScrollBarAlwaysOff as ScrollBarAlwaysOff
+# import QtCore.Qt.ScrollBarAlwaysOff as ScrollBarAlwaysOff
+from PyQt5.QtGui import QIcon, QFont
+from PyQt5.QtWidgets import QWidget, QDialog, QLineEdit, QFrame, QMainWindow, QApplication, QVBoxLayout, QHBoxLayout, QPushButton, QButtonGroup, QListWidget, QLabel, QListWidgetItem, QListView, QPlainTextEdit, QTextBrowser, QSplitter, QStyleFactory
+import sys
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
-import whoosh
 import whoosh.highlight
-from whoosh.fields import *
+import whoosh.fields
 from whoosh.index import create_in
-from whoosh.qparser import QueryParser
 
 from highlighter import Highlighter
 
@@ -162,7 +157,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         super().__init__(parent)
 
         # create index
-        schema = Schema(title=TEXT(stored=True), path=STORED, content=TEXT(stored=True), tags=KEYWORD)
+        schema = whoosh.fields.Schema(title=whoosh.fields.TEXT(stored=True), path=whoosh.fields.STORED, content=whoosh.fields.TEXT(stored=True), tags=whoosh.fields.KEYWORD)
         if not os.path.exists("indexdir"):
             os.mkdir("indexdir")
         self.ix = create_in("indexdir", schema)
@@ -242,9 +237,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         data = {}
         for filename in QDir("data").entryList(["*.md"], QDir.Files):
             file = QFile("data/{}".format(filename))
-            if not file.open(QtCore.QIODevice.ReadOnly):
+            if not file.open(QIODevice.ReadOnly):
                 print("couldn't open file")
-            stream = QtCore.QTextStream(file)
+            stream = QTextStream(file)
             content = stream.readAll()
             self.block_lexer.clear_ast()
             html = self.markdowner(content)
@@ -308,7 +303,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.top_controls.setLayout(layout)
 
         self.list1 = QListWidget(self)
-        self.list1.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.list1.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.list1.setObjectName("file_list")
 
         self.fill_filename_list()
@@ -472,7 +467,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             # self.list_parts.setMaximumWidth(max_width)
             # self.list_parts.sizehint(max_width)
             # self.list_parts.setFixedWidth(max_width)
-            self.list_parts.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            self.list_parts.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
     def list_files_dblclicked(self, mouse_event):
         print("list_files_dblclicked()")
