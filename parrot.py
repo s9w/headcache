@@ -570,7 +570,7 @@ class Example(QMainWindow):
         self.statusBar().showMessage('Ready')
         self.statusBar().setMaximumHeight(18)
 
-        self.setWindowTitle("Carrie")
+        self.setWindowTitle("Parrot")
         self.setStyle(QStyleFactory.create("fusion"))
         self.show()
 
