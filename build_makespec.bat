@@ -1,0 +1,1 @@
+pyi-makespec -F --noconsole parrot.py
