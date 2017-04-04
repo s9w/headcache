@@ -5,18 +5,23 @@ import os.path
 
 import mistune
 from PyQt5 import QtCore
-from PyQt5.QtCore import QIODevice, QTextStream, pyqtSignal, QDir, QFile, QSize, Qt, QRect
-# from QtCore.Qt import ScrollBarAlwaysOff
-# from QtCore import QtCore.Qt.ScrollBarAlwaysOff as ScrollBarAlwaysOff
-# import QtCore.Qt.ScrollBarAlwaysOff as ScrollBarAlwaysOff
-from PyQt5.QtGui import QIcon, QFont
-from PyQt5.QtWidgets import QWidget, QDialog, QLineEdit, QFrame, QMainWindow, QApplication, QVBoxLayout, QHBoxLayout, QPushButton, QButtonGroup, QListWidget, QLabel, QListWidgetItem, QListView, QPlainTextEdit, QTextBrowser, QSplitter, QStyleFactory
-import sys
+from PyQt5.QtCore import QDir, pyqtSignal, QFile
+from PyQt5.QtCore import QRect
+from PyQt5.QtCore import QSize, QMargins
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont, QPalette, QIcon
+from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
+                             QPlainTextEdit, QTextEdit, QLabel, QLineEdit, QPushButton, QTextBrowser,
+                             QVBoxLayout, QFormLayout, QSplitter, QButtonGroup, QToolButton, QSizePolicy)
+from PyQt5.QtWidgets import QListView, QStyleFactory, QInputDialog, QDialog
+from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
+import whoosh
 import whoosh.highlight
-import whoosh.fields
+from whoosh.fields import *
 from whoosh.index import create_in
+from whoosh.qparser import QueryParser
 
 from highlighter import Highlighter
 
@@ -156,23 +161,24 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     def __init__(self, parent):
         super().__init__(parent)
 
-        # create index
-        schema = whoosh.fields.Schema(title=whoosh.fields.TEXT(stored=True), path=whoosh.fields.STORED, content=whoosh.fields.TEXT(stored=True), tags=whoosh.fields.KEYWORD)
+        with open("preview_style.css") as file_style:
+            self.preview_css_str = '<style type="text/css">{}</style>'.format(file_style.read())
+
+        # markdown
+        self.ast_generator = AstBlockParser()
+        self.markdowner_simple = mistune.Markdown(renderer=IdRenderer())
+
+        # stored data
+        self.data = self.load_data()
+
+        # setup search index
+        schema = Schema(title=TEXT(stored=True), path=STORED, content=TEXT(stored=True), tags=KEYWORD)
         if not os.path.exists("indexdir"):
             os.mkdir("indexdir")
         self.ix = create_in("indexdir", schema)
         self.writer = self.ix.writer()
 
-        # markdown
-        self.block_lexer = AstBlockParser()
-        self.markdowner = mistune.Markdown(renderer=IdRenderer(), block=self.block_lexer)
-        self.part_block_lexer = AstBlockParserPart()
-        self.markdowner_simple = mistune.Markdown(renderer=IdRenderer(), block=self.part_block_lexer)
-
-        # stored data
-        self.data = self.load_data()
-
-        # search index
+        # index files
         for filename, topic in self.data.items():
             for part in topic["content"]:
                 self.writer.add_document(path=filename, content=part["content"], title=part["title"])
@@ -188,14 +194,13 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         # setup GUI
         self.config = self.load_config()
         self.initUI()
+        print("initUI done")
         self.old_sizes = self.splitter.sizes()
-        self.ev_ratio = self.get_ev_ratio()
         self.parent().resize(*self.config["window_size"])
         self.overlay = Overlay(self)
         self.overlay.hide()
 
-        with open("preview_style.css") as file_style:
-            self.preview_css_str = '<style type="text/css">{}</style>'.format(file_style.read())
+
 
         if self.data:
             self.list1.setCurrentRow(0)
@@ -209,7 +214,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     # immediately before they are shown
     def showEvent(self, event):
         self.old_sizes = self.splitter.sizes()
-        self.ev_ratio = self.get_ev_ratio()
         # potentially also on resizeEvent()?
         self.overlay.setGeometry(QRect(self.finder.pos() + self.finder.rect().bottomLeft(), QSize(400, 200)))
 
@@ -233,21 +237,26 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         with open("config.json", "w") as f:
             json.dump(self.config, f, indent=4)
 
+    def load_file(self, filename):
+        file = QFile("data/{}".format(filename))
+        if not file.open(QtCore.QIODevice.ReadOnly):
+            print("couldn't open file")
+        stream = QtCore.QTextStream(file)
+        content = stream.readAll()
+
+        self.ast_generator.clear_ast()
+        self.ast_generator.parse(mistune.preprocessing(content))
+        entry = self.ast_generator.ast
+        for i, lvl2 in enumerate(list(entry["content"])):
+            # html_string = self.preview_css_str + self.markdowner_simple(editor_text)
+            # print(i, lvl2["content"])
+            # entry["content"][i] = entry["content"][i]
+            # text = lvl2["content"]
+            entry["content"][i]["html"] = self.preview_css_str + self.markdowner_simple(lvl2["content"])
+        return entry
+
     def load_data(self):
-        data = {}
-        for filename in QDir("data").entryList(["*.md"], QDir.Files):
-            file = QFile("data/{}".format(filename))
-            if not file.open(QIODevice.ReadOnly):
-                print("couldn't open file")
-            stream = QTextStream(file)
-            content = stream.readAll()
-            self.block_lexer.clear_ast()
-            html = self.markdowner(content)
-            entry = self.block_lexer.ast
-            entry["html"] = html
-            entry["modified"] = False
-            data[filename] = entry
-        return data
+        return {fn: self.load_file(fn) for fn in QDir("data").entryList(["*.md"], QDir.Files)}
 
     def change_file_title(self, title_new):
         filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
@@ -263,47 +272,20 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     def initUI(self):
         allLayout = QVBoxLayout()
 
-        self.top_controls = QWidget()
+        top_controls = QWidget()
         layout = QHBoxLayout()
-        button_save = QPushButton("save")
-        button_save.clicked.connect(self.clicked_save)
-        layout.addWidget(button_save)
 
         button2 = QPushButton("search")
         button2.clicked.connect(self.click_search)
         layout.addWidget(button2)
 
-        # mode buttons
-        def create_mode_button(icon_hint):
-            button = QPushButton()
-            button_icon = QIcon("gfx/icon_mode_{}.png".format(icon_hint))
-            button.setIcon(button_icon)
-            button.setIconSize(QSize(30, 20))
-            button.clicked.connect(self.click_mode)
-            button.setCheckable(True)
-            self.bg.addButton(button)
-            return button
-
-        self.bg = QButtonGroup()
-        self.button_edit = create_mode_button("e")
-        self.button_both = create_mode_button("ev")
-        self.button_view = create_mode_button("v")
-
-        self.button_both.setChecked(True)
-        bg_layout = QHBoxLayout()
-        bg_layout.addWidget(self.button_edit)
-        bg_layout.addWidget(self.button_both)
-        bg_layout.addWidget(self.button_view)
-        bg_layout.setSpacing(0)
-        layout.addLayout(bg_layout)
-
         self.finder = MySearchBar(self)
         layout.addWidget(self.finder)
-        layout.setContentsMargins(5,0,5,0)
-        self.top_controls.setLayout(layout)
+        layout.setContentsMargins(5, 0, 5, 0)
+        top_controls.setLayout(layout)
 
         self.list1 = QListWidget(self)
-        self.list1.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.list1.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.list1.setObjectName("file_list")
 
         self.fill_filename_list()
@@ -314,18 +296,13 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.list_parts = QListWidget()
         self.list_parts.setObjectName("part_list")
         self.list_parts.model().rowsInserted.connect(self.list_parts_rows_ins)
-        self.list_parts .currentItemChanged.connect(self.list_parts_selected)
+        self.list_parts.currentItemChanged.connect(self.list_parts_selected)
         self.list_parts.mouseDoubleClickEvent = self.list_parts_dblclicked
-
-        self.button_left_add = QPushButton("+")
-        self.button_left_add.setMaximumWidth(self.button_left_add.sizeHint().height())
 
         self.left_widget = QWidget()
         left_layout = QVBoxLayout()
-        left_layout.setContentsMargins(0,0,0,0)
+        left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.addWidget(self.list1)
-        left_layout.addWidget(self.button_left_add, Qt.AlignRight)
-        left_layout.setAlignment(self.button_left_add, Qt.AlignHCenter)
         self.left_widget.setLayout(left_layout)
         self.left_widget.setMinimumWidth(30)
         # left_max_width = self.list1.sizeHintForColumn(0) + self.list1.frameWidth() * 2
@@ -333,38 +310,22 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.left_widget.setMaximumWidth(left_max_width)
         self.list1.setResizeMode(QListView.Adjust)
 
-        self.editor1 = QPlainTextEdit()
-        self.highlighter = Highlighter(self.editor1.document())
-        self.highlighter.set_section_size(self.config["editor_font_size_section"])
-        self.editor1.setObjectName("editor")
-        self.editor1.textChanged.connect(self.editor_changed)
-        # self.editor1.modificationChanged.connect(self.editor_changed)
-        # print("doc", self.editor1.document())
-        # self.editor1.document().contentsChanged.connect(self.editor_changed)
-
         self.view1 = QTextBrowser()
         self.view1.setObjectName("preview")
-        font = QFont()
-        font.setFamily(self.config["editor_font"])
-        font.setFixedPitch(True)
-        font.setPointSize(self.config["editor_font_size"])
-        self.editor1.setFont(font)
 
         self.splitter = QSplitter()
         self.splitter.setObjectName("splitter_lists_working")
         self.splitter.setHandleWidth(1)
         self.splitter.addWidget(self.left_widget)
         self.splitter.addWidget(self.list_parts)
-        self.splitter.addWidget(self.editor1)
         self.splitter.addWidget(self.view1)
-        self.splitter.setSizes([80,80,100,100])
+        self.splitter.setSizes([80, 80, 100])
         self.splitter.setStretchFactor(0, 0)
         self.splitter.setStretchFactor(1, 0)
         self.splitter.setStretchFactor(2, 1)
-        self.splitter.setStretchFactor(3, 1)
-        self.splitter.splitterMoved.connect(self.splitter_res_ev)
+        self.splitter.splitterMoved.connect(self.splitter_moved)
 
-        allLayout.addWidget(self.top_controls, stretch=0)
+        allLayout.addWidget(top_controls, stretch=0)
         allLayout.addWidget(self.splitter, stretch=1)
         allLayout.setContentsMargins(0, 5, 0, 0)
         self.setLayout(allLayout)
@@ -380,15 +341,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             title_index_dict[topic["title"]] = i
         return title_index_dict
 
-    def get_ev_ratio(self):
-        return self.splitter.sizes()[2] / (self.splitter.sizes()[2] + self.splitter.sizes()[3])
-
-    def splitter_res_ev(self, pos, index):
-        # pos = new (sizes + handleWidths)
-        # print(index, pos, self.splitter.handleWidth(), self.splitter.sizes(), sum(self.splitter.sizes()), self.old_sizes, sum(self.old_sizes), self.width())
-
-        # leftmost; between the lists
-        if index == 1:
+    def splitter_moved(self, pos, handle_index):
+        if handle_index == 1:
             moved_amount = self.splitter.sizes()[0] - self.old_sizes[0]
             if moved_amount != 0:
                 old_state = self.splitter.blockSignals(True)
@@ -396,64 +350,16 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
                 self.splitter.moveSplitter(pos_second_old + moved_amount, 2)
                 self.splitter.blockSignals(old_state)
 
-        # not the divider between editor and preview
-        if index in [1, 2]:
-            old_state = self.splitter.blockSignals(True)
-            ev_left_start = sum(self.splitter.sizes()[:2]) + 2*self.splitter.handleWidth()
-            space_left = self.splitter.width() - self.splitter.handleWidth() - ev_left_start
-            ev_divider_pos = ev_left_start + self.ev_ratio*space_left
-            self.splitter.moveSplitter(ev_divider_pos, 3)
-            self.splitter.blockSignals(old_state)
-
-        # divider between editor and preview
-        if index == 3:
-            self.ev_ratio = self.get_ev_ratio()
-
         self.old_sizes = self.splitter.sizes()
 
-    def click_mode(self):
-        sender = self.sender()
-        if sender == self.button_edit:
-            self.editor1.show()
-            self.view1.hide()
-        elif sender == self.button_both:
-            self.editor1.show()
-            self.view1.show()
-        elif sender == self.button_view:
-            self.editor1.hide()
-            self.view1.show()
-
     def update_preview(self):
-        # get current text from internal data
+        print("update_preview()")
         filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
-        editor_text = self.data[filename]["content"][self.list_parts.currentRow()]["content"]
-
-        # parsing
-        self.part_block_lexer.clear_ast()
-        html_string = self.preview_css_str + self.markdowner_simple(editor_text)
-
-        # set the preview html
-        self.view1.setHtml(html_string)
-
-        # update data and part list when part name was edited
-        if self.list_parts.currentItem().text() != self.part_block_lexer.ast["title"]:
-            self.list_parts.currentItem().setText(self.part_block_lexer.ast["title"])
-            self.data[filename]["content"][self.list_parts.currentRow()]["title"] = self.part_block_lexer.ast["title"]
-
-    def editor_changed(self):
-        if self.list1.currentRow() != -1 and self.list_parts.currentRow() != -1:
-            filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
-
-            # update internal data
-            self.data[filename]["content"][self.list_parts.currentRow()]["content"] = self.editor1.toPlainText()
-            self.data[filename]["modified"] = True
-
-            self.list1.itemWidget(self.list1.currentItem()).set_modified(True)
-
-            # update GUI
-            self.update_preview()
+        html = self.data[filename]["content"][self.list_parts.currentRow()]["html"]
+        self.view1.setHtml(html)
 
     def list_files_changed(self, list_widget_item):
+        print("list_files_changed()")
         is_cleared = list_widget_item is None
 
         if not is_cleared:
@@ -467,7 +373,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             # self.list_parts.setMaximumWidth(max_width)
             # self.list_parts.sizehint(max_width)
             # self.list_parts.setFixedWidth(max_width)
-            self.list_parts.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.list_parts.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
     def list_files_dblclicked(self, mouse_event):
         print("list_files_dblclicked()")
@@ -486,32 +392,10 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             if current_item:
                 source_string = self.data[filename]["content"][self.list_parts.currentRow()]["content"]
 
-                old_state = self.editor1.blockSignals(True)
-                self.editor1.setPlainText(source_string)
+                # old_state = self.editor1.blockSignals(True)
+                # self.editor1.setPlainText(source_string)
                 self.update_preview()
-                self.editor1.blockSignals(old_state)
-
-
-    def clicked_save(self):
-        filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
-        item = self.data[filename]
-
-        # build string from internal data
-        content_new = "# {}\n".format(item["title"])
-        for v in item["content"]:
-            content_new += "\n" + v["content"].strip() + "\n"
-        content_new = content_new.replace("\n", "\r\n")
-
-        # write string to disk
-        file_write = QFile("data/{}".format(filename))
-        if not file_write.open(QtCore.QIODevice.WriteOnly):
-            print("couldn't open file")
-        stream = QtCore.QTextStream(file_write)
-        stream << content_new
-        file_write.close()
-
-        # mark unmodified
-        self.list1.itemWidget(self.list1.currentItem()).set_modified(False)
+                # self.editor1.blockSignals(old_state)
 
     def resizeEvent(self, e):
         if e.oldSize() != QSize(-1, -1):
@@ -570,7 +454,7 @@ class Example(QMainWindow):
         self.statusBar().showMessage('Ready')
         self.statusBar().setMaximumHeight(18)
 
-        self.setWindowTitle("Parrot")
+        self.setWindowTitle("Carrie")
         self.setStyle(QStyleFactory.create("fusion"))
         self.show()
 
@@ -601,11 +485,16 @@ class AstBlockParser(mistune.BlockLexer):
 
                 getattr(self, 'parse_%s' % key)(m)
 
-                # self.list_rules excluded to prevent the internal recalling of parse() to create double outputs
+                if key not in ["heading", "newline"] and len(self.ast["content"]) == 0:
+                    print("error, content under lvl1 heading")
+
+                # add content to last tree item if it's not a heading (see parse_heading())
+                # or a nested list_rule (prevents double processing list items)
                 if key != "heading" and rules != self.list_rules:
                     self.ast["content"][-1]["content"] += m.group(0)
-                if key == "heading" and len(self.ast["content"]) > 0:
-                    self.ast["content"][-1]["content"] += m.group(0)
+                # if key == "heading" and len(self.ast["content"]) > 0:
+                #     self.ast["content"][-1]["content"] += m.group(0)
+
                 return m
             return False  # pragma: no cover
 
@@ -622,58 +511,15 @@ class AstBlockParser(mistune.BlockLexer):
         level = len(m.group(1))
         text = m.group(2)
         if level == 1:
+            if "title" in self.ast:
+                print("ERROR, second lvl 1 title")
             self.ast["title"] = text
             self.ast["content"] = []
-            self.ast["html"] = ""
         elif level == 2:
-            self.ast["content"].append({"title": text, "content": ""})
-        super().parse_heading(m)
-
-class AstBlockParserPart(mistune.BlockLexer):
-    def __init__(self, rules=None, **kwargs):
-        self.ast = {}
-        super().__init__(rules, **kwargs)
-
-    def clear_ast(self):
-        self.ast = {}
-
-    def parse(self, text, rules=None):
-        text = text.rstrip('\n')
-
-        if not rules:
-            rules = self.default_rules
-
-        def manipulate(text):
-            for key in rules:
-                rule = getattr(self.rules, key)
-                m = rule.match(text)
-                if not m:
-                    continue
-
-                getattr(self, 'parse_%s' % key)(m)
-
-                if key != "heading" and rules != self.list_rules:
-                    self.ast["content"] += m.group(0)
-                if key == "heading" and len(self.ast["content"]) > 0:
-                    self.ast["content"] += m.group(0)
-                return m
-            return False  # pragma: no cover
-
-        while text:
-            m = manipulate(text)
-            if m is not False:
-                text = text[len(m.group(0)):]
-                continue
-            if text:  # pragma: no cover
-                raise RuntimeError('Infinite loop at: %s' % text)
-        return self.tokens
-
-    def parse_heading(self, m):
-        level = len(m.group(1))
-        text = m.group(2)
-        if level == 2:
-            self.ast["title"] = text
-            self.ast["content"] = ""
+            self.ast["content"].append({
+                "title": text,
+                "content": m.group(0)
+            })
         super().parse_heading(m)
 
 
