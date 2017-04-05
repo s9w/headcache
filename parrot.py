@@ -1,29 +1,28 @@
 import json
 import logging
+import mistune
 import os
 import os.path
 
-import mistune
+import whoosh
+import whoosh.highlight
 from PyQt5 import QtCore
-from PyQt5.QtCore import QDir, pyqtSignal, QFile
+from PyQt5.QtCore import QDir, pyqtSignal, QFile, QTimer
 from PyQt5.QtCore import QRect
-from PyQt5.QtCore import QSize, QMargins
+from PyQt5.QtCore import QSize
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QPalette, QIcon
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
-                             QPlainTextEdit, QTextEdit, QLabel, QLineEdit, QPushButton, QTextBrowser,
-                             QVBoxLayout, QFormLayout, QSplitter, QButtonGroup, QToolButton, QSizePolicy)
-from PyQt5.QtWidgets import QListView, QStyleFactory, QInputDialog, QDialog
+                             QLabel, QLineEdit, QPushButton, QTextBrowser,
+                             QVBoxLayout, QSplitter)
+from PyQt5.QtWidgets import QListView, QStyleFactory
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
-import whoosh
-import whoosh.highlight
 from whoosh.fields import *
 from whoosh.index import create_in
 from whoosh.qparser import QueryParser
 
-from highlighter import Highlighter
+from md_parser import AstBlockParser
 
 
 class IdRenderer(mistune.Renderer):
@@ -48,34 +47,11 @@ class SearchresultWidget(QWidget):
         self.label.setText(text)
 
 
-class FileRenameDialog(QDialog):
-    def __init__(self, title, filename, parent=None):
-        super(FileRenameDialog, self).__init__(parent)
-        layout = QFormLayout()
-
-        self.edit_title = QLineEdit(title)
-        layout.addRow(QLabel("Title"), self.edit_title)
-
-        self.edit_filename = QLineEdit(filename)
-        layout.addRow(QLabel("Filename"), self.edit_filename)
-
-        self.button_ok = QPushButton("OK", self)
-        self.button_ok.clicked.connect(self.clicked_ok)
-        layout.addRow(self.button_ok)
-
-        self.setLayout(layout)
-        self.edit_title.setFocus(Qt.TabFocusReason)
-
-    def clicked_ok(self):
-        self.accept()
-
-
 class FileListItemWidget(QWidget):
     def __init__(self, title: str, filename, parent=None):
         super(FileListItemWidget, self).__init__(parent)
 
         self.real_parent = parent
-        # self.index = index
 
         layout = QVBoxLayout()
         self.label_title = QLabel(title)
@@ -100,13 +76,6 @@ class FileListItemWidget(QWidget):
 
         self.label_title.style().unpolish(self.label_title)
         self.label_title.style().polish(self.label_title)
-
-    def mouseDoubleClickEvent(self, mouse_event):
-        # super().mouseDoubleClickEvent(QMouseEvent)
-        dialog = FileRenameDialog(self.label_title.text(), self.label_filename.text())
-        if dialog.exec_():
-            if self.label_title.text() != dialog.edit_title.text():
-                self.real_parent.change_file_title(dialog.edit_title.text())
 
 
 class Overlay(QWidget):
@@ -178,15 +147,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.ix = create_in("indexdir", schema)
         self.writer = self.ix.writer()
 
-        # index files
-        for filename, topic in self.data.items():
-            for part in topic["content"]:
-                self.writer.add_document(path=filename, content=part["content"], title=part["title"])
-        # self.writer.add_document(title="performance", content="something bold indeed", tags="tag1 tag2", path="cpp.md")
-        # self.writer.add_document(title="memory", content="a thing about memory", path="cpp.md")
-        # self.writer.add_document(title="conda", content="installing things", path="python.md")
-        self.writer.commit()
-
         self.active_filename = ""
         self.active_part_name = ""
         self.active_part_index = None
@@ -194,13 +154,11 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         # setup GUI
         self.config = self.load_config()
         self.initUI()
-        print("initUI done")
+        # print("initUI done")
         self.old_sizes = self.splitter.sizes()
         self.parent().resize(*self.config["window_size"])
         self.overlay = Overlay(self)
         self.overlay.hide()
-
-
 
         if self.data:
             self.list1.setCurrentRow(0)
@@ -211,11 +169,22 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         self.setFocusPolicy(Qt.StrongFocus)
 
+    def index_search(self):
+        self.parent().statusBar().showMessage('indexing...')
+        for filename, topic in self.data.items():
+            for part in topic["content"]:
+                self.writer.add_document(path=filename, content=part["content"], title=part["title"])
+        # self.writer.add_document(title="performance", content="something bold indeed", tags="tag1 tag2", path="cpp.md")
+        # self.writer.add_document(title="memory", content="a thing about memory", path="cpp.md")
+        # self.writer.add_document(title="conda", content="installing things", path="python.md")
+        self.writer.commit()
+        self.parent().statusBar().showMessage('done')
+
     # immediately before they are shown
     def showEvent(self, event):
         self.old_sizes = self.splitter.sizes()
-        # potentially also on resizeEvent()?
         self.overlay.setGeometry(QRect(self.finder.pos() + self.finder.rect().bottomLeft(), QSize(400, 200)))
+        QTimer.singleShot(50, self.index_search)
 
     @staticmethod
     def load_config():
@@ -244,14 +213,13 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         stream = QtCore.QTextStream(file)
         content = stream.readAll()
 
+        # built structure tree
         self.ast_generator.clear_ast()
         self.ast_generator.parse(mistune.preprocessing(content))
         entry = self.ast_generator.ast
+
+        # add html code to tree nodes
         for i, lvl2 in enumerate(list(entry["content"])):
-            # html_string = self.preview_css_str + self.markdowner_simple(editor_text)
-            # print(i, lvl2["content"])
-            # entry["content"][i] = entry["content"][i]
-            # text = lvl2["content"]
             entry["content"][i]["html"] = self.preview_css_str + self.markdowner_simple(lvl2["content"])
         return entry
 
@@ -290,14 +258,12 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         self.fill_filename_list()
 
-        self.list1.currentItemChanged.connect(self.list_files_changed)
-        self.list1.mouseDoubleClickEvent = self.list_files_dblclicked
+        self.list1.currentItemChanged.connect(self.file_selected)
 
         self.list_parts = QListWidget()
         self.list_parts.setObjectName("part_list")
         self.list_parts.model().rowsInserted.connect(self.list_parts_rows_ins)
         self.list_parts.currentItemChanged.connect(self.list_parts_selected)
-        self.list_parts.mouseDoubleClickEvent = self.list_parts_dblclicked
 
         self.left_widget = QWidget()
         left_layout = QVBoxLayout()
@@ -358,8 +324,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         html = self.data[filename]["content"][self.list_parts.currentRow()]["html"]
         self.view1.setHtml(html)
 
-    def list_files_changed(self, list_widget_item):
-        print("list_files_changed()")
+    def file_selected(self, list_widget_item):
         is_cleared = list_widget_item is None
 
         if not is_cleared:
@@ -374,12 +339,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             # self.list_parts.sizehint(max_width)
             # self.list_parts.setFixedWidth(max_width)
             self.list_parts.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-
-    def list_files_dblclicked(self, mouse_event):
-        print("list_files_dblclicked()")
-
-    def list_parts_dblclicked(self, mouse_event):
-        print("list_parts_dblclicked()", mouse_event)
 
     def list_parts_rows_ins(self):
         if self.list_parts.count() > 0:
@@ -451,7 +410,7 @@ class Example(QMainWindow):
         self.main_widget.msg.connect(self.statusbar.showMessage)
         with open("style.qss") as file_style:
             self.setStyleSheet(file_style.read())
-        self.statusBar().showMessage('Ready')
+        # self.statusBar().showMessage('Ready')
         self.statusBar().setMaximumHeight(18)
 
         self.setWindowTitle("Carrie")
@@ -460,67 +419,6 @@ class Example(QMainWindow):
 
     def closeEvent(self, *args, **kwargs):
         self.main_widget.closeEvent(*args, **kwargs)
-
-
-class AstBlockParser(mistune.BlockLexer):
-    def __init__(self, rules=None, **kwargs):
-        self.ast = {}
-        super().__init__(rules, **kwargs)
-
-    def clear_ast(self):
-        self.ast = {}
-
-    def parse(self, text, rules=None):
-        text = text.rstrip('\n')
-
-        if not rules:
-            rules = self.default_rules
-
-        def manipulate(text):
-            for key in rules:
-                rule = getattr(self.rules, key)
-                m = rule.match(text)
-                if not m:
-                    continue
-
-                getattr(self, 'parse_%s' % key)(m)
-
-                if key not in ["heading", "newline"] and len(self.ast["content"]) == 0:
-                    print("error, content under lvl1 heading")
-
-                # add content to last tree item if it's not a heading (see parse_heading())
-                # or a nested list_rule (prevents double processing list items)
-                if key != "heading" and rules != self.list_rules:
-                    self.ast["content"][-1]["content"] += m.group(0)
-                # if key == "heading" and len(self.ast["content"]) > 0:
-                #     self.ast["content"][-1]["content"] += m.group(0)
-
-                return m
-            return False  # pragma: no cover
-
-        while text:
-            m = manipulate(text)
-            if m is not False:
-                text = text[len(m.group(0)):]
-                continue
-            if text:  # pragma: no cover
-                raise RuntimeError('Infinite loop at: %s' % text)
-        return self.tokens
-
-    def parse_heading(self, m):
-        level = len(m.group(1))
-        text = m.group(2)
-        if level == 1:
-            if "title" in self.ast:
-                print("ERROR, second lvl 1 title")
-            self.ast["title"] = text
-            self.ast["content"] = []
-        elif level == 2:
-            self.ast["content"].append({
-                "title": text,
-                "content": m.group(0)
-            })
-        super().parse_heading(m)
 
 
 if __name__ == '__main__':
