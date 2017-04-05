@@ -211,6 +211,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         if not file.open(QtCore.QIODevice.ReadOnly):
             print("couldn't open file")
         stream = QtCore.QTextStream(file)
+        stream.setCodec("UTF-8")
         content = stream.readAll()
 
         # built structure tree
