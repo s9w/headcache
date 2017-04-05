@@ -4,47 +4,30 @@ import mistune
 import os
 import os.path
 
-import whoosh
-import whoosh.highlight
 from PyQt5 import QtCore
 from PyQt5.QtCore import QDir, pyqtSignal, QFile, QTimer
 from PyQt5.QtCore import QRect
 from PyQt5.QtCore import QSize
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
-                             QLabel, QLineEdit, QPushButton, QTextBrowser,
+                             QLabel, QLineEdit, QTextBrowser,
                              QVBoxLayout, QSplitter)
 from PyQt5.QtWidgets import QListView, QStyleFactory
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
+from whoosh.analysis import StandardAnalyzer, NgramFilter
 from whoosh.fields import *
 from whoosh.index import create_in
-from whoosh.qparser import QueryParser
+from whoosh.qparser import MultifieldParser
 
 from md_parser import AstBlockParser
+from search import Overlay, Result_formatter_simple
 
 
 class IdRenderer(mistune.Renderer):
     def header(self, text, level, raw):
         return '<h{0} id="{1}">{1}</h{0}>\n'.format(level, text)
-
-
-class SearchresultWidget(QWidget):
-    def __init__(self, parent=None):
-        super(SearchresultWidget, self).__init__(parent)
-        allLayout = QVBoxLayout()
-
-        self.label = QLabel("test")
-        self.label.setObjectName("inner_label")
-        # self.label.setStyleSheet("#match{background-color: red;}")
-        allLayout.addWidget(self.label)
-
-        # allLayout.setContentsMargins(0,0,0,0)
-        self.setLayout(allLayout)
-
-    def set_text(self, text):
-        self.label.setText(text)
 
 
 class FileListItemWidget(QWidget):
@@ -78,50 +61,23 @@ class FileListItemWidget(QWidget):
         self.label_title.style().polish(self.label_title)
 
 
-class Overlay(QWidget):
-    def __init__(self, parent=None):
-        QWidget.__init__(self, parent)
-        allLayout = QVBoxLayout()
-
-        # self.l1 = QListView()
-        # model = QStandardItemModel(self.l1)
-        #
-        # model.appendRow(QStandardItem("one"))
-        # model.appendRow(QStandardItem("two"))
-        # self.l1.setModel(model)
-        # self.l1.setItemDelegate(HTMLDelegate())
-
-        self.l1 = QListWidget(self)
-        self.l1.setObjectName("search_result_list")
-        self.l1.setViewMode(QListView.ListMode)
-        allLayout.addWidget(self.l1)
-
-        self.setLayout(allLayout)
-        # self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
-        # self.setFocusPolicy(Qt.StrongFocus)
-
-    def add_search_results(self, items):
-        self.l1.clear()
-        for item_text in items:
-            item_widget = SearchresultWidget()  # parent)
-            item_widget.set_text(item_text)
-            item = QListWidgetItem()
-            item.setSizeHint(item_widget.sizeHint())
-            self.l1.addItem(item)
-            self.l1.setItemWidget(item, item_widget)
-
-
 class MySearchBar(QLineEdit):
     def __init__(self, parent):
         super(MySearchBar, self).__init__(parent)
+        self.query_old = ""
 
-    def focusOutEvent(self, focus_event):
-        self.parent().parent().overlay.hide()
-        super().focusOutEvent(focus_event)
+    def keyPressEvent(self, ev):
+        super().keyPressEvent(ev)
+        length_threshold = 2
+        length_criteria = len(self.text()) >= length_threshold
+        if self.text() != self.query_old and length_criteria:
+            self.parent().parent().search_with(self.text())
 
-    def focusInEvent(self, focus_event):
-        self.parent().parent().overlay.show()
-        super().focusInEvent(focus_event)
+        # hide search overlay if search query is too short
+        if not length_criteria:
+            self.parent().parent().overlay.hide()
+
+        self.query_old = self.text()
 
 
 class MainWidget(QFrame):  # QDialog #QMainWindow
@@ -139,26 +95,24 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         # stored data
         self.data = self.load_data()
+        self.initUI()
 
         # setup search index
-        schema = Schema(title=TEXT(stored=True), path=STORED, content=TEXT(stored=True), tags=KEYWORD)
+        analyzer_typing = StandardAnalyzer() | NgramFilter(minsize=2, maxsize=8)
+        schema = Schema(
+            title=TEXT(stored=True, analyzer=analyzer_typing),
+            path=STORED,
+            content=TEXT(stored=True, analyzer=analyzer_typing),
+            tags=KEYWORD)
         if not os.path.exists("indexdir"):
             os.mkdir("indexdir")
         self.ix = create_in("indexdir", schema)
-        self.writer = self.ix.writer()
-
-        self.active_filename = ""
-        self.active_part_name = ""
-        self.active_part_index = None
 
         # setup GUI
         self.config = self.load_config()
-        self.initUI()
         # print("initUI done")
         self.old_sizes = self.splitter.sizes()
         self.parent().resize(*self.config["window_size"])
-        self.overlay = Overlay(self)
-        self.overlay.hide()
 
         if self.data:
             self.list1.setCurrentRow(0)
@@ -171,13 +125,12 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
     def index_search(self):
         self.parent().statusBar().showMessage('indexing...')
+        writer = self.ix.writer()
         for filename, topic in self.data.items():
             for part in topic["content"]:
-                self.writer.add_document(path=filename, content=part["content"], title=part["title"])
-        # self.writer.add_document(title="performance", content="something bold indeed", tags="tag1 tag2", path="cpp.md")
-        # self.writer.add_document(title="memory", content="a thing about memory", path="cpp.md")
-        # self.writer.add_document(title="conda", content="installing things", path="python.md")
-        self.writer.commit()
+                writer.add_document(path=filename, content=part["content"])
+                writer.add_document(path=filename, title=part["title"])
+        writer.commit()
         self.parent().statusBar().showMessage('done')
 
     # immediately before they are shown
@@ -221,7 +174,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         # add html code to tree nodes
         for i, lvl2 in enumerate(list(entry["content"])):
-            entry["content"][i]["html"] = self.preview_css_str + self.markdowner_simple(lvl2["content"])
+            content_markdown = "##{}\n{}".format(lvl2["title"], lvl2["content"])
+            content_html = self.markdowner_simple(content_markdown)
+            entry["content"][i]["html"] = self.preview_css_str + content_html
         return entry
 
     def load_data(self):
@@ -243,10 +198,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         top_controls = QWidget()
         layout = QHBoxLayout()
-
-        button2 = QPushButton("search")
-        button2.clicked.connect(self.click_search)
-        layout.addWidget(button2)
 
         self.finder = MySearchBar(self)
         layout.addWidget(self.finder)
@@ -345,8 +296,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         if self.list_parts.count() > 0:
             self.list_parts.setCurrentRow(0)
 
-    def list_parts_selected(self, list_widget_item):
+    def list_parts_selected(self, curr, prev):
         filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
+        # print(self.list1.itemWidget(self.list1.currentItem()).get_filename(), self.list1.itemWidget(curr).get_filename())
         if self.list_parts.currentRow() != -1:
             current_item = self.list_parts.currentItem()
             if current_item:
@@ -364,38 +316,33 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     def closeEvent(self, *args, **kwargs):
         self.save_config()
 
-    def click_search(self):
+    def search_with(self, text):
+        print("search_with()")
         with self.ix.searcher() as searcher:
-            query = QueryParser("content", self.ix.schema).parse(self.finder.text())
-            results = searcher.search(query)
+            parser = MultifieldParser(["title", "content"], self.ix.schema)
+            # parser.add_plugin(FuzzyTermPlugin())
+            query = parser.parse("{}".format(text))
+            results = searcher.search(query, terms=True)
             results.formatter = Result_formatter_simple()
-            result_count = len(results)
 
-            search_results = [res.highlights("content") for res in results]
-            self.overlay.add_search_results(search_results)
+            search_results = []
+            for i, result in enumerate(results):
+                if "title" in result:
+                    high = result.highlights("title", text=result["title"])
+                    high = "<h2>{}</h2>".format(high)
+                else:
+                    high = result.highlights("content", text=result["content"])
+                print(i, result, high)
+                search_results.append(high)
 
-            # for i in range(result_count):
-            #     print("result {}: ".format(i), results[i])
-            #     print(results[i].highlights("content"))
+            # search_results = [res.highlights("content") for res in results]
+            self.overlay.set_search_results(search_results)
+            visible = text and len(results) > 0
+            self.overlay.setVisible(visible)
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape:
             self.finder.setFocus()
-
-
-class Result_formatter_simple(whoosh.highlight.Formatter):
-    def __init__(self):
-        pass
-
-    def format_token(self, text, token, replace=False):
-        def get_text(original, token, replace):
-            if replace:
-                return token.text
-            else:
-                return original[token.startchar:token.endchar]
-
-        ttext = whoosh.highlight.htmlescape(get_text(text, token, replace), quote=False)
-        return '<span style="background-color: rgba(150,0,0,150);">{}</span>'.format(ttext)
 
 
 class Example(QMainWindow):

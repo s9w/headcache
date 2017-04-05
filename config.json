@@ -1,9 +1,9 @@
 {
-    "editor_font_size": 9,
-    "editor_font_size_section": 9,
+    "editor_font_size_section": 10,
     "editor_font": "Source Code Pro",
+    "editor_font_size": 10,
     "window_size": [
-        656,
-        454
+        877,
+        528
     ]
 }

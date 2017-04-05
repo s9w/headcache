@@ -57,6 +57,6 @@ class AstBlockParser(mistune.BlockLexer):
         elif level == 2:
             self.ast["content"].append({
                 "title": text,
-                "content": m.group(0)
+                "content": m.group(0)[m.group(0).find('\n')+1:].strip()
             })
         super().parse_heading(m)
