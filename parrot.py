@@ -20,6 +20,7 @@ from whoosh.analysis import StandardAnalyzer, NgramFilter
 from whoosh.fields import *
 from whoosh.index import create_in
 from whoosh.qparser import MultifieldParser
+from whoosh.highlight import ContextFragmenter, SentenceFragmenter
 
 from md_parser import AstBlockParser
 from search import Overlay, Result_formatter_simple
@@ -132,11 +133,12 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.initUI()
 
         # setup search index
-        analyzer_typing = StandardAnalyzer() | NgramFilter(minsize=2, maxsize=8)
+        analyzer_typing = StandardAnalyzer() | NgramFilter(minsize=2, maxsize=10)
         schema = Schema(
             title=TEXT(stored=True, analyzer=analyzer_typing),
             path=STORED,
             content=TEXT(stored=True, analyzer=analyzer_typing),
+            content_full=TEXT(stored=True),
             tags=KEYWORD)
         if not os.path.exists("indexdir"):
             os.mkdir("indexdir")
@@ -162,7 +164,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         writer = self.ix.writer()
         for filename, topic in self.data.items():
             for part in topic["content"]:
-                writer.add_document(path=filename, content=part["content"])
+                writer.add_document(path=filename, title="", _stored_title=part["title"], content=part["content"], content_full=part["content"])
+                # writer.add_document(path=filename, title=part["title"], content=part["content"])
                 writer.add_document(path=filename, title=part["title"])
         writer.commit()
         self.parent().statusBar().showMessage('done')
@@ -350,28 +353,44 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     def closeEvent(self, *args, **kwargs):
         self.save_config()
 
+    @staticmethod
+    def get_text_trimmed(text, max_length=60):
+        print("trim", text)
+        if max_length and len(text) > max_length:
+            print("NOOOOO")
+            return "...{}...".format(text)
+        else:
+            return text
+
+    @staticmethod
+    def get_text_dotted(text):
+        return "...{}...".format(text)
+
     def search_with(self, text):
         print("search_with()")
         with self.ix.searcher() as searcher:
-            parser = MultifieldParser(["title", "content"], self.ix.schema)
+            parser = MultifieldParser(["title", "content", "content"], self.ix.schema)
             # parser.add_plugin(FuzzyTermPlugin())
             query = parser.parse("{}".format(text))
-            results = searcher.search(query, terms=True)
+            results = searcher.search(query)
             results.formatter = Result_formatter_simple()
+            fragmenter = ContextFragmenter(maxchars=150, surround=20)
+            results.fragmenter = fragmenter
 
             search_results = []
             for i, result in enumerate(results):
-                if "title" in result:
-                    high = result.highlights("title", text=result["title"])
-                    high = "<h2>{}</h2>".format(high)
+                if "content" in result:
+                    high_content = self.get_text_dotted(result.highlights("content", text=result["content"]))
+                    html = "<b>{}</b><br>{}".format(result["title"], high_content)
                 else:
-                    high = result.highlights("content", text=result["content"])
-                print(i, result, high)
-                search_results.append(high)
+                    highl_title = result.highlights("title", text=result["title"])
+                    html = "<h4>{}</h4>".format(highl_title)
+                # print(i, result, html)
+                html_style = "<style>color: red</style>"
+                search_results.append(html_style+html)
+                print(html_style+html)
 
             self.overlay.set_search_results(search_results)
-            # visibility = text and len(results) > 0
-            # self.overlay.setVisible(visibility)
             self.overlay.update_visibility()
 
     def switch_mode(self, mode_new="switch"):

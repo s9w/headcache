@@ -65,16 +65,18 @@ QPushButton{
 }
 
 #search_result_list::item{
-    background-color: rgba(100,100,100, 200);
+    background-color: rgba(80,80,80, 220);
     border-bottom: 1px solid black;
 }
 
 #search_result_list::item:selected{
-    background-color: rgba(100, 100,255, 100);
+    background-color: rgba(120, 120,120, 220);
 }
 
 #inner_label{
     color: #f8f8f2;
+    margin: 0;
+    padding: 0;
 }
 
 #file_list_title{

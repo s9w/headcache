@@ -85,4 +85,4 @@ class Result_formatter_simple(whoosh.highlight.Formatter):
 
     def format_token(self, text, token, replace=False):
         ttext = whoosh.highlight.htmlescape(whoosh.highlight.get_text(text, token, replace), quote=False)
-        return '<span style="background-color: rgba(150,0,0,150);">{}</span>'.format(ttext)
+        return '<span style="color: rgb(0,0,0); background-color: rgba(255,231,146,220);">{}</span>'.format(ttext)
