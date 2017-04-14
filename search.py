@@ -6,7 +6,7 @@ from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
 
 class SearchresultWidget(QWidget):
-    def __init__(self, label_text, part_index, parent=None):
+    def __init__(self, label_text, file_index, part_index, parent=None):
         super(SearchresultWidget, self).__init__(parent)
         allLayout = QVBoxLayout()
 
@@ -19,10 +19,8 @@ class SearchresultWidget(QWidget):
         self.setLayout(allLayout)
 
         self.label.setText(label_text)
+        self.file_index = file_index
         self.part_index = part_index
-
-    def set_text(self, text):
-        self.label.setText(text)
 
 
 class Overlay(QWidget):
@@ -60,8 +58,8 @@ class Overlay(QWidget):
         print("dclick", item)
 
     def goto_result(self):
-        print(self.l1.itemWidget(self.l1.currentItem()).part_index)
-        print("goto result")
+        self.parent().list1.setCurrentRow(self.l1.itemWidget(self.l1.currentItem()).file_index)
+        self.parent().list_parts.setCurrentRow(self.l1.itemWidget(self.l1.currentItem()).part_index)
 
     def update_visibility(self, show=True):
         if self.l1.count() > 0 and show:
@@ -73,9 +71,8 @@ class Overlay(QWidget):
     def set_search_results(self, items):
         pass
         self.l1.clear()
-        for item_text, part_index in items:
-            item_widget = SearchresultWidget(item_text, part_index)  # parent)
-            # item_widget.set_text(item_text)
+        for item_text, file_index, part_index in items:
+            item_widget = SearchresultWidget(item_text, file_index, part_index)  # parent)
             item = QListWidgetItem()
             item.setSizeHint(item_widget.sizeHint())
             self.l1.addItem(item)

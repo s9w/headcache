@@ -136,9 +136,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         analyzer_typing = StandardAnalyzer() | NgramFilter(minsize=2, maxsize=8)
         schema = Schema(
             title=TEXT(stored=True, analyzer=analyzer_typing),
-            path=STORED,
-            part_index=STORED,
             content=TEXT(stored=True, analyzer=analyzer_typing),
+            file_index=STORED,
+            part_index=STORED,
             tags=KEYWORD)
         if not os.path.exists("indexdir"):
             os.mkdir("indexdir")
@@ -162,11 +162,21 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     def index_search(self):
         self.parent().statusBar().showMessage('indexing...')
         writer = self.ix.writer()
-        for filename, topic in self.data.items():
+        # for filename, topic in self.data.items():
+        for file_index, (filename, topic) in enumerate(sorted(self.data.items(), key=lambda k: k[1]["title"])):
             for part_index, part in enumerate(topic["content"]):
-                writer.add_document(path=filename, part_index=part_index, title="", _stored_title=part["title"], content=part["content"])
-                # writer.add_document(path=filename, title=part["title"], content=part["content"])
-                writer.add_document(path=filename, part_index=part_index, title=part["title"])
+                writer.add_document(
+                    file_index=file_index,
+                    part_index=part_index,
+                    title="",
+                    _stored_title=part["title"],
+                    content=part["content"]
+                )
+                writer.add_document(
+                    file_index=file_index,
+                    part_index=part_index,
+                    title=part["title"]
+                )
         writer.commit()
         self.parent().statusBar().showMessage('done')
 
@@ -393,7 +403,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
                     highl_title = self.highlight_keyword(result["title"], text, len_max=80)
                     html = "<h4>{}</h4>".format(highl_title)
                 html_style = "<style>color: red</style>"
-                search_results.append((html_style+html, result["part_index"]))
+                search_results.append((html_style+html, result["file_index"], result["part_index"]))
 
             self.overlay.set_search_results(search_results)
             self.overlay.update_visibility()
