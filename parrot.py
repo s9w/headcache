@@ -396,7 +396,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             search_results = []
             for i, result in enumerate(results):
                 if "content" in result:
-                    high_content = self.highlight_keyword(result["content"], text)
+                    high_content = self.highlight_keyword(result["content"], text).replace("\n", "<br>")
                     html = "<b>{}</b><br>{}".format(result["title"], high_content)
                 else:
                     # highl_title = result.highlights("title", text=result["title"])
