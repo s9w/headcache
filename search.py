@@ -1,7 +1,7 @@
 import whoosh
 import whoosh.highlight
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QListWidget, QListView, QListWidgetItem
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
 
@@ -15,7 +15,7 @@ class SearchresultWidget(QWidget):
         # self.label.setStyleSheet("#match{background-color: red;}")
         allLayout.addWidget(self.label)
 
-        allLayout.setContentsMargins(5,5,5,5)
+        allLayout.setContentsMargins(5, 5, 5, 5)
         self.setLayout(allLayout)
 
         self.label.setText(label_text)
@@ -59,7 +59,6 @@ class Overlay(QWidget):
         else:
             self.hide()
 
-
     def set_search_results(self, items):
         self.l1.clear()
         for item_text, file_index, part_index in items:
@@ -69,3 +68,32 @@ class Overlay(QWidget):
             self.l1.addItem(item)
             self.l1.setItemWidget(item, item_widget)
         self.l1.setCurrentRow(0)
+
+
+class IndexWorker(QThread):
+    op = pyqtSignal(int)
+
+    def __init__(self, parent=None):
+        QThread.__init__(self, parent)
+
+    def begin(self, writer, data):
+        self.writer = writer
+        self.data = data
+        self.start()
+
+    def run(self):
+        for file_index, (filename, topic) in enumerate(sorted(self.data.items(), key=lambda k: k[1]["title"])):
+            for part_index, part in enumerate(topic["content"]):
+                self.writer.add_document(
+                    file_index=file_index,
+                    part_index=part_index,
+                    title="",
+                    _stored_title=part["title"],
+                    content=part["content"]
+                )
+                self.writer.add_document(
+                    file_index=file_index,
+                    part_index=part_index,
+                    title=part["title"]
+                )
+        self.writer.commit()

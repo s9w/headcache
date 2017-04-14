@@ -3,30 +3,27 @@ import logging
 import mistune
 import os
 import os.path
-import time
 
 from PyQt5 import QtCore
-from PyQt5.QtCore import QDir, pyqtSignal, QFile, QTimer, QUrl, QThread
+from PyQt5.Qt import QDesktopServices
+from PyQt5.QtCore import QDir, pyqtSignal, QFile, QTimer, QUrl
 from PyQt5.QtCore import QRect
 from PyQt5.QtCore import QSize
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
-                             QLabel, QLineEdit, QTextBrowser,
-                             QVBoxLayout, QSplitter)
+                             QLabel, QVBoxLayout, QSplitter)
 from PyQt5.QtWidgets import QListView, QStyleFactory
-from PyQt5.QtWidgets import QListWidget, QListWidgetItem
-from PyQt5.Qt import QDesktopServices
-from PyQt5.QtGui import QPainter, QBrush
+from PyQt5.QtWidgets import QListWidgetItem
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
 from whoosh.analysis import StandardAnalyzer, NgramFilter
 from whoosh.fields import *
 from whoosh.index import create_in
 from whoosh.qparser import MultifieldParser
-from whoosh.highlight import ContextFragmenter, SentenceFragmenter
 
 from md_parser import AstBlockParser
-from search import Overlay
+from search import Overlay, IndexWorker
+from ui_components import SearchBar, IndicatorList, IndicatorTextBrowser
 
 
 class IdRenderer(mistune.Renderer):
@@ -63,102 +60,6 @@ class FileListItemWidget(QWidget):
 
         self.label_title.style().unpolish(self.label_title)
         self.label_title.style().polish(self.label_title)
-
-
-class MySearchBar(QLineEdit):
-    def __init__(self, parent):
-        super(MySearchBar, self).__init__(parent)
-        self.query_old = ""
-
-    def mousePressEvent(self, a0):
-        if a0.button() == Qt.LeftButton:
-            self.parent().parent().usage_mode = "search"
-
-    def keyPressEvent(self, ev):
-        super().keyPressEvent(ev)
-
-        # arrow keys are delegated to the result list
-        if ev.key() in [Qt.Key_Up, Qt.Key_Down]:
-            self.parent().parent().overlay.l1.keyPressEvent(ev)
-            return
-
-        elif ev.key() == Qt.Key_Return:
-            self.parent().parent().goto_result()
-            return
-
-        # only search when query is long enough and different from last (not
-        # just cursor changes)
-        length_threshold = 2
-        length_criteria = len(self.text()) >= length_threshold
-        if self.text() != self.query_old and length_criteria:
-            self.parent().parent().search_with(self.text())
-        self.parent().parent().overlay.update_visibility(length_criteria)
-
-        self.query_old = self.text()
-
-    def focusInEvent(self, ev):
-        super().focusInEvent(ev)
-        length_threshold = 2
-        length_criteria = len(self.text()) >= length_threshold
-        self.parent().parent().overlay.update_visibility(length_criteria)
-
-
-class IndicatorList(QListWidget):
-    def __init__(self):
-        super().__init__()
-    def paintEvent(self, ev):
-        super().paintEvent(ev)
-        if self.hasFocus():
-            qp = QPainter(self.viewport())
-            qp.begin(self)
-            w = 1
-            r = QRect(0, self.height()-w, self.width(), w)
-            qp.fillRect(r, QBrush(QtCore.Qt.red))
-            qp.end()
-        self.update()
-
-
-class IndicatorTextBrowser(QTextBrowser):
-    def __init__(self):
-        super().__init__()
-    def paintEvent(self, ev):
-        super().paintEvent(ev)
-        if self.hasFocus():
-            qp = QPainter(self.viewport())
-            qp.begin(self)
-            w = 1
-            r = QRect(0, self.height()-w, self.width(), w)
-            qp.fillRect(r, QBrush(QtCore.Qt.red))
-            qp.end()
-        self.update()
-
-
-class IndexWorker(QThread):
-    op = pyqtSignal(int)
-    def __init__(self, parent = None):
-        QThread.__init__(self, parent)
-
-    def begin(self, writer, data):
-        self.writer = writer
-        self.data = data
-        self.start()
-
-    def run(self):
-        for file_index, (filename, topic) in enumerate(sorted(self.data.items(), key=lambda k: k[1]["title"])):
-            for part_index, part in enumerate(topic["content"]):
-                self.writer.add_document(
-                    file_index=file_index,
-                    part_index=part_index,
-                    title="",
-                    _stored_title=part["title"],
-                    content=part["content"]
-                )
-                self.writer.add_document(
-                    file_index=file_index,
-                    part_index=part_index,
-                    title=part["title"]
-                )
-        self.writer.commit()
 
 
 class MainWidget(QFrame):  # QDialog #QMainWindow
@@ -306,7 +207,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         top_controls = QWidget()
         layout = QHBoxLayout()
 
-        self.finder = MySearchBar(self)
+        self.finder = SearchBar(self)
         self.finder.setObjectName("finder")
         layout.addWidget(self.finder)
         layout.setContentsMargins(5, 0, 5, 0)
