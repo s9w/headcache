@@ -3,9 +3,10 @@ import logging
 import mistune
 import os
 import os.path
+import time
 
 from PyQt5 import QtCore
-from PyQt5.QtCore import QDir, pyqtSignal, QFile, QTimer, QUrl
+from PyQt5.QtCore import QDir, pyqtSignal, QFile, QTimer, QUrl, QThread
 from PyQt5.QtCore import QRect
 from PyQt5.QtCore import QSize
 from PyQt5.QtCore import Qt
@@ -132,6 +133,34 @@ class IndicatorTextBrowser(QTextBrowser):
         self.update()
 
 
+class IndexWorker(QThread):
+    op = pyqtSignal(int)
+    def __init__(self, parent = None):
+        QThread.__init__(self, parent)
+
+    def begin(self, writer, data):
+        self.writer = writer
+        self.data = data
+        self.start()
+
+    def run(self):
+        for file_index, (filename, topic) in enumerate(sorted(self.data.items(), key=lambda k: k[1]["title"])):
+            for part_index, part in enumerate(topic["content"]):
+                self.writer.add_document(
+                    file_index=file_index,
+                    part_index=part_index,
+                    title="",
+                    _stored_title=part["title"],
+                    content=part["content"]
+                )
+                self.writer.add_document(
+                    file_index=file_index,
+                    part_index=part_index,
+                    title=part["title"]
+                )
+        self.writer.commit()
+
+
 class MainWidget(QFrame):  # QDialog #QMainWindow
     msg = pyqtSignal(str)
 
@@ -164,7 +193,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         # setup GUI
         self.config = self.load_config()
-        # print("initUI done")
         self.old_sizes = self.splitter.sizes()
         self.parent().resize(*self.config["window_size"])
 
@@ -177,32 +205,27 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         self.setFocusPolicy(Qt.StrongFocus)
 
-    def index_search(self):
+    def indexing_finished(self):
+        self.finder.setEnabled(True)
+        self.searcher = self.ix.searcher()
+        self.parent().statusBar().showMessage('ready')
+        self.finder.setText("")
+
+    def start_indexing(self):
         self.parent().statusBar().showMessage('indexing...')
+        self.finder.setText("indexing...")
+        self.finder.setEnabled(False)
+
+        self.thread = IndexWorker()
+        self.thread.finished.connect(self.indexing_finished)
         writer = self.ix.writer()
-        # for filename, topic in self.data.items():
-        for file_index, (filename, topic) in enumerate(sorted(self.data.items(), key=lambda k: k[1]["title"])):
-            for part_index, part in enumerate(topic["content"]):
-                writer.add_document(
-                    file_index=file_index,
-                    part_index=part_index,
-                    title="",
-                    _stored_title=part["title"],
-                    content=part["content"]
-                )
-                writer.add_document(
-                    file_index=file_index,
-                    part_index=part_index,
-                    title=part["title"]
-                )
-        writer.commit()
-        self.parent().statusBar().showMessage('done')
+        self.thread.begin(writer, self.data)
 
     # immediately before they are shown
     def showEvent(self, event):
         self.old_sizes = self.splitter.sizes()
         self.overlay.setGeometry(QRect(self.finder.pos() + self.finder.rect().bottomLeft(), QSize(400, 200)))
-        QTimer.singleShot(50, self.index_search)
+        QTimer.singleShot(50, self.start_indexing)
 
     def goto_result(self):
         self.overlay.hide()
@@ -284,6 +307,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         layout = QHBoxLayout()
 
         self.finder = MySearchBar(self)
+        self.finder.setObjectName("finder")
         layout.addWidget(self.finder)
         layout.setContentsMargins(5, 0, 5, 0)
         top_controls.setLayout(layout)
@@ -425,26 +449,24 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         return part_start + part_highlight + part_end
 
     def search_with(self, text):
-        with self.ix.searcher() as searcher:
-            parser = MultifieldParser(["title", "content"], self.ix.schema)
-            query = parser.parse("{}".format(text))
-            results = searcher.search(query)
+        parser = MultifieldParser(["title", "content"], self.ix.schema)
+        query = parser.parse("{}".format(text))
+        results = self.searcher.search(query)
 
-            search_results = []
-            for i, result in enumerate(results):
-                if "content" in result:
-                    high_content = self.highlight_keyword(result["content"], text).replace("\n", "<br>")
-                    html = "<b>{}</b><br>{}".format(result["title"], high_content)
-                else:
-                    # highl_title = result.highlights("title", text=result["title"])
-                    highl_title = self.highlight_keyword(result["title"], text, len_max=80)
-                    html = "<h4>{}</h4>".format(highl_title)
-                html_style = "<style>color: red</style>"
-                search_results.append((html_style+html, result["file_index"], result["part_index"]))
+        search_results = []
+        for i, result in enumerate(results):
+            if "content" in result:
+                high_content = self.highlight_keyword(result["content"], text).replace("\n", "<br>")
+                html = "<b>{}</b><br>{}".format(result["title"], high_content)
+            else:
+                # highl_title = result.highlights("title", text=result["title"])
+                highl_title = self.highlight_keyword(result["title"], text, len_max=80)
+                html = "<h4>{}</h4>".format(highl_title)
+            html_style = "<style>color: red</style>"
+            search_results.append((html_style+html, result["file_index"], result["part_index"]))
 
-            self.overlay.set_search_results(search_results)
-            self.overlay.update_visibility()
-
+        self.overlay.set_search_results(search_results)
+        self.overlay.update_visibility()
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape:

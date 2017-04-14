@@ -94,3 +94,7 @@ QPushButton{
 #match{
     background-color: red;
 }
+
+#finder:disabled{
+    background-color: #cdcdcd;
+}
