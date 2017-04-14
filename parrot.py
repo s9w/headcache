@@ -365,15 +365,15 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
     @staticmethod
     def highlight_keyword(text, keyword, len_max=60):
-        keyword_stripped = keyword.strip()
-        i_begin = text.find(keyword_stripped)
-        i_end = i_begin + len(keyword_stripped)
+        keyword_sane = keyword.strip().lower()
+        i_begin = text.lower().find(keyword_sane)
+        i_end = i_begin + len(keyword_sane)
 
         # max length the text before and after the keyword can have
-        len_context = (len_max - len(keyword_stripped)) // 2
+        len_context = (len_max - len(keyword_sane)) // 2
 
         part_highlight = '<span style="color: rgb(0,0,0); background-color: rgba(255,231,146,220);">{}</span>'.format(
-            keyword_stripped)
+            text[i_begin:i_end])
 
         # trim context strings if too long
         part_start = text[:i_begin]
