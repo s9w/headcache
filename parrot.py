@@ -5,7 +5,7 @@ import os
 import os.path
 
 from PyQt5 import QtCore
-from PyQt5.QtCore import QDir, pyqtSignal, QFile, QTimer
+from PyQt5.QtCore import QDir, pyqtSignal, QFile, QTimer, QUrl
 from PyQt5.QtCore import QRect
 from PyQt5.QtCore import QSize
 from PyQt5.QtCore import Qt
@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QF
                              QVBoxLayout, QSplitter)
 from PyQt5.QtWidgets import QListView, QStyleFactory
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
+from PyQt5.Qt import QDesktopServices
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
 from whoosh.analysis import StandardAnalyzer, NgramFilter
@@ -236,7 +237,14 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.list1.itemWidget(self.list1.currentItem()).set_modified(True)
 
     def main_focused(self, *_):
+        """hides the search result overlay"""
         self.overlay.hide()
+
+    def file_dclick(self, item):
+        """opens the file with an external editor"""
+        current_path = QDir.currentPath()
+        filename = self.list1.itemWidget(item).get_filename()
+        QDesktopServices.openUrl(QUrl(u"{}/data/{}".format(current_path, filename)))
 
     def initUI(self):
         allLayout = QVBoxLayout()
@@ -252,6 +260,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.list1 = QListWidget(self)
         self.list1.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.list1.setObjectName("file_list")
+        self.list1.itemDoubleClicked.connect(self.file_dclick)
 
         self.fill_filename_list()
 
