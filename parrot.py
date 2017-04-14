@@ -167,7 +167,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         # built structure tree
         self.ast_generator.clear_ast()
-        self.ast_generator.parse(mistune.preprocessing(content))
+        self.ast_generator.parse(mistune.preprocessing(content), filename=filename)
         entry = self.ast_generator.ast
 
         # add html code to tree nodes

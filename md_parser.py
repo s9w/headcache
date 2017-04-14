@@ -9,7 +9,8 @@ class AstBlockParser(mistune.BlockLexer):
     def clear_ast(self):
         self.ast = {}
 
-    def parse(self, text, rules=None):
+    def parse(self, text, filename, rules=None):
+        self.filename = filename
         text = text.rstrip('\n')
 
         if not rules:
@@ -54,14 +55,24 @@ class AstBlockParser(mistune.BlockLexer):
                 print("ERROR, second lvl 1 title")
             self.ast["title"] = text
             self.ast["content"] = []
+
         elif level == 2:
-            index_newline = m.group(0).find('\n')
-            if index_newline != -1:
-                content = m.group(0)[index_newline+1:].strip()
-            else:
-                content = ""
+            # if file has no level 1 heading
+            if "content" not in self.ast:
+                self.ast["title"] = self.filename[:self.filename.find(".")]
+                self.ast["content"] = []
+
             self.ast["content"].append({
                 "title": text,
-                "content": content
+                "content": self.get_content(m.group(0))
             })
         super().parse_heading(m)
+
+    @staticmethod
+    def get_content(text):
+        index_newline = text.find('\n')
+        if index_newline != -1:
+            content = text[index_newline + 1:].strip()
+        else:
+            content = ""
+        return content
