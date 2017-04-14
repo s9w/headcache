@@ -37,39 +37,30 @@ class Overlay(QWidget):
         self.setLayout(allLayout)
 
         # self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
-        self.setFocusPolicy(Qt.ClickFocus)
+        # self.setFocusPolicy(Qt.ClickFocus)
 
         # self.setAttribute(Qt.WA_ShowWithoutActivating)
         # self.l1.setAttribute(Qt.WA_ShowWithoutActivating)
-        # self.setFocusPolicy(Qt.NoFocus)
+        self.setFocusPolicy(Qt.StrongFocus)
         # self.l1.setFocusPolicy(Qt.NoFocus)
         # print(parent.finder)
         # self.setFocusProxy(parent.finder)
 
-    def focusInEvent(self, ev):
-        print("Overlay, focusInEvent")
-        super().focusInEvent(ev)
-
-    def focusOutEvent(self, ev):
-        print("Overlay, focusOutEvent")
-        super().focusOutEvent(ev)
-
     def item_dclick(self, item):
-        print("dclick", item)
+        self.parent().goto_result()
 
-    def goto_result(self):
-        self.parent().list1.setCurrentRow(self.l1.itemWidget(self.l1.currentItem()).file_index)
-        self.parent().list_parts.setCurrentRow(self.l1.itemWidget(self.l1.currentItem()).part_index)
+    def get_selected_indices(self):
+        item_widget = self.l1.itemWidget(self.l1.currentItem())
+        return item_widget.file_index, item_widget.part_index
 
-    def update_visibility(self, show=True):
-        if self.l1.count() > 0 and show:
+    def update_visibility(self, other_criteria=True):
+        if self.l1.count() > 0 and other_criteria:
             self.show()
         else:
             self.hide()
 
 
     def set_search_results(self, items):
-        pass
         self.l1.clear()
         for item_text, file_index, part_index in items:
             item_widget = SearchresultWidget(item_text, file_index, part_index)  # parent)

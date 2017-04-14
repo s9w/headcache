@@ -66,15 +66,10 @@ class MySearchBar(QLineEdit):
     def __init__(self, parent):
         super(MySearchBar, self).__init__(parent)
         self.query_old = ""
-        # self.setFocusProxy(self.parent().parent().overlay)
-
-    def update_overlay_visibility(self):
-        pass
 
     def mousePressEvent(self, a0):
         if a0.button() == Qt.LeftButton:
             self.parent().parent().usage_mode = "search"
-
 
     def keyPressEvent(self, ev):
         super().keyPressEvent(ev)
@@ -83,8 +78,10 @@ class MySearchBar(QLineEdit):
         if ev.key() in [Qt.Key_Up, Qt.Key_Down]:
             self.parent().parent().overlay.l1.keyPressEvent(ev)
             return
-        if ev.key() == Qt.Key_Return:
-            self.parent().parent().overlay.goto_result()
+
+        elif ev.key() == Qt.Key_Return:
+            self.parent().parent().goto_result()
+            return
 
         # only search when query is long enough and different from last (not
         # just cursor changes)
@@ -94,12 +91,6 @@ class MySearchBar(QLineEdit):
             self.parent().parent().search_with(self.text())
         self.parent().parent().overlay.update_visibility(length_criteria)
 
-
-        # hide search overlay if search query is too short
-        # update_overlay_visibility()
-        # if not length_criteria:
-        #     self.parent().parent().overlay.hide()
-
         self.query_old = self.text()
 
     def focusInEvent(self, ev):
@@ -107,11 +98,6 @@ class MySearchBar(QLineEdit):
         length_threshold = 2
         length_criteria = len(self.text()) >= length_threshold
         self.parent().parent().overlay.update_visibility(length_criteria)
-
-    def focusOutEvent(self, ev):
-        super().focusOutEvent(ev)
-        # self.focusInEvent(ev)
-        self.parent().parent().switch_mode(mode_new="browse")
 
 
 class MainWidget(QFrame):  # QDialog #QMainWindow
@@ -186,6 +172,15 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.overlay.setGeometry(QRect(self.finder.pos() + self.finder.rect().bottomLeft(), QSize(400, 200)))
         QTimer.singleShot(50, self.index_search)
 
+    def goto_result(self):
+        self.overlay.hide()
+        self.finder.setText("")
+
+        file_index, part_index = self.overlay.get_selected_indices()
+        self.list1.setCurrentRow(file_index)
+        self.list_parts.setCurrentRow(part_index)
+        self.view1.setFocus()
+
     @staticmethod
     def load_config():
         config = {
@@ -240,6 +235,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         # mark file with changed title as modified
         self.list1.itemWidget(self.list1.currentItem()).set_modified(True)
 
+    def main_focused(self, *_):
+        self.overlay.hide()
+
     def initUI(self):
         allLayout = QVBoxLayout()
 
@@ -277,6 +275,10 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         self.view1 = QTextBrowser()
         self.view1.setObjectName("preview")
+
+        self.list1.focusInEvent = self.main_focused
+        self.list_parts.focusInEvent = self.main_focused
+        self.view1.focusInEvent = self.main_focused
 
         self.splitter = QSplitter()
         self.splitter.setObjectName("splitter_lists_working")
@@ -318,7 +320,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.old_sizes = self.splitter.sizes()
 
     def update_preview(self):
-        print("update_preview()")
         filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
         html = self.data[filename]["content"][self.list_parts.currentRow()]["html"]
         self.view1.setHtml(html)
@@ -387,7 +388,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         return part_start + part_highlight + part_end
 
     def search_with(self, text):
-        print("search_with()")
         with self.ix.searcher() as searcher:
             parser = MultifieldParser(["title", "content"], self.ix.schema)
             query = parser.parse("{}".format(text))
@@ -408,30 +408,13 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             self.overlay.set_search_results(search_results)
             self.overlay.update_visibility()
 
-    def switch_mode(self, mode_new="switch"):
-        def to_browse():
-            self.overlay.hide()
-            self.view1.setFocus()
-            self.usage_mode = "browse"
-
-        def to_search():
-            self.finder.setFocus()
-            self.usage_mode = "search"
-
-        if mode_new == "browse":
-            to_browse()
-        elif mode_new == "search":
-            to_search()
-        elif mode_new == "switch":
-            if self.usage_mode == "browse":
-                to_search()
-            else:
-                to_browse()
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape:
-            self.switch_mode()
-            # self.finder.setFocus()
+            if self.finder.hasFocus():
+                self.view1.setFocus()
+            else:
+                self.finder.setFocus()
 
 
 class Example(QMainWindow):
@@ -460,6 +443,9 @@ class Example(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    # app.focusChanged.connect(f1)
+    # app = Appp(sys.argv)
+    # app.focusChanged = f1
     ex = Example()
 
     # print("QtGui.QStyleFactory.keys()", QStyleFactory.keys())
