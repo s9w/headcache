@@ -23,7 +23,7 @@ from whoosh.qparser import MultifieldParser
 from whoosh.highlight import ContextFragmenter, SentenceFragmenter
 
 from md_parser import AstBlockParser
-from search import Overlay, Result_formatter_simple
+from search import Overlay
 
 
 class IdRenderer(mistune.Renderer):
@@ -133,12 +133,12 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.initUI()
 
         # setup search index
-        analyzer_typing = StandardAnalyzer() | NgramFilter(minsize=2, maxsize=10)
+        analyzer_typing = StandardAnalyzer() | NgramFilter(minsize=2, maxsize=8)
         schema = Schema(
             title=TEXT(stored=True, analyzer=analyzer_typing),
             path=STORED,
+            part_index=STORED,
             content=TEXT(stored=True, analyzer=analyzer_typing),
-            content_full=TEXT(stored=True),
             tags=KEYWORD)
         if not os.path.exists("indexdir"):
             os.mkdir("indexdir")
@@ -163,10 +163,10 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.parent().statusBar().showMessage('indexing...')
         writer = self.ix.writer()
         for filename, topic in self.data.items():
-            for part in topic["content"]:
-                writer.add_document(path=filename, title="", _stored_title=part["title"], content=part["content"], content_full=part["content"])
+            for part_index, part in enumerate(topic["content"]):
+                writer.add_document(path=filename, part_index=part_index, title="", _stored_title=part["title"], content=part["content"])
                 # writer.add_document(path=filename, title=part["title"], content=part["content"])
-                writer.add_document(path=filename, title=part["title"])
+                writer.add_document(path=filename, part_index=part_index, title=part["title"])
         writer.commit()
         self.parent().statusBar().showMessage('done')
 
@@ -354,41 +354,46 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.save_config()
 
     @staticmethod
-    def get_text_trimmed(text, max_length=60):
-        print("trim", text)
-        if max_length and len(text) > max_length:
-            print("NOOOOO")
-            return "...{}...".format(text)
-        else:
-            return text
+    def highlight_keyword(text, keyword, len_max=60):
+        keyword_stripped = keyword.strip()
+        i_begin = text.find(keyword_stripped)
+        i_end = i_begin + len(keyword_stripped)
 
-    @staticmethod
-    def get_text_dotted(text):
-        return "...{}...".format(text)
+        # max length the text before and after the keyword can have
+        len_context = (len_max - len(keyword_stripped)) // 2
+
+        part_highlight = '<span style="color: rgb(0,0,0); background-color: rgba(255,231,146,220);">{}</span>'.format(
+            keyword_stripped)
+
+        # trim context strings if too long
+        part_start = text[:i_begin]
+        if len(part_start) > len_context:
+            part_start = "..." + part_start[len(part_start)-len_context:]
+
+        part_end = text[i_end:]
+        if len(part_end) > len_context:
+            part_end = part_end[:len_context] + "..."
+
+        return part_start + part_highlight + part_end
 
     def search_with(self, text):
         print("search_with()")
         with self.ix.searcher() as searcher:
-            parser = MultifieldParser(["title", "content", "content"], self.ix.schema)
-            # parser.add_plugin(FuzzyTermPlugin())
+            parser = MultifieldParser(["title", "content"], self.ix.schema)
             query = parser.parse("{}".format(text))
             results = searcher.search(query)
-            results.formatter = Result_formatter_simple()
-            fragmenter = ContextFragmenter(maxchars=150, surround=20)
-            results.fragmenter = fragmenter
 
             search_results = []
             for i, result in enumerate(results):
                 if "content" in result:
-                    high_content = self.get_text_dotted(result.highlights("content", text=result["content"]))
+                    high_content = self.highlight_keyword(result["content"], text)
                     html = "<b>{}</b><br>{}".format(result["title"], high_content)
                 else:
-                    highl_title = result.highlights("title", text=result["title"])
+                    # highl_title = result.highlights("title", text=result["title"])
+                    highl_title = self.highlight_keyword(result["title"], text, len_max=80)
                     html = "<h4>{}</h4>".format(highl_title)
-                # print(i, result, html)
                 html_style = "<style>color: red</style>"
-                search_results.append(html_style+html)
-                print(html_style+html)
+                search_results.append((html_style+html, result["part_index"]))
 
             self.overlay.set_search_results(search_results)
             self.overlay.update_visibility()
@@ -412,7 +417,6 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
                 to_search()
             else:
                 to_browse()
-
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape:

@@ -6,7 +6,7 @@ from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
 
 class SearchresultWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, label_text, part_index, parent=None):
         super(SearchresultWidget, self).__init__(parent)
         allLayout = QVBoxLayout()
 
@@ -15,8 +15,11 @@ class SearchresultWidget(QWidget):
         # self.label.setStyleSheet("#match{background-color: red;}")
         allLayout.addWidget(self.label)
 
-        # allLayout.setContentsMargins(0,0,0,0)
+        allLayout.setContentsMargins(5,5,5,5)
         self.setLayout(allLayout)
+
+        self.label.setText(label_text)
+        self.part_index = part_index
 
     def set_text(self, text):
         self.label.setText(text)
@@ -57,6 +60,7 @@ class Overlay(QWidget):
         print("dclick", item)
 
     def goto_result(self):
+        print(self.l1.itemWidget(self.l1.currentItem()).part_index)
         print("goto result")
 
     def update_visibility(self, show=True):
@@ -69,20 +73,11 @@ class Overlay(QWidget):
     def set_search_results(self, items):
         pass
         self.l1.clear()
-        for item_text in items:
-            item_widget = SearchresultWidget()  # parent)
-            item_widget.set_text(item_text)
+        for item_text, part_index in items:
+            item_widget = SearchresultWidget(item_text, part_index)  # parent)
+            # item_widget.set_text(item_text)
             item = QListWidgetItem()
             item.setSizeHint(item_widget.sizeHint())
             self.l1.addItem(item)
             self.l1.setItemWidget(item, item_widget)
         self.l1.setCurrentRow(0)
-
-
-class Result_formatter_simple(whoosh.highlight.Formatter):
-    def __init__(self):
-        pass
-
-    def format_token(self, text, token, replace=False):
-        ttext = whoosh.highlight.htmlescape(whoosh.highlight.get_text(text, token, replace), quote=False)
-        return '<span style="color: rgb(0,0,0); background-color: rgba(255,231,146,220);">{}</span>'.format(ttext)
