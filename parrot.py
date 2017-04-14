@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QF
 from PyQt5.QtWidgets import QListView, QStyleFactory
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from PyQt5.Qt import QDesktopServices
+from PyQt5.QtGui import QPainter, QBrush
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
 from whoosh.analysis import StandardAnalyzer, NgramFilter
@@ -99,6 +100,36 @@ class MySearchBar(QLineEdit):
         length_threshold = 2
         length_criteria = len(self.text()) >= length_threshold
         self.parent().parent().overlay.update_visibility(length_criteria)
+
+
+class IndicatorList(QListWidget):
+    def __init__(self):
+        super().__init__()
+    def paintEvent(self, ev):
+        super().paintEvent(ev)
+        if self.hasFocus():
+            qp = QPainter(self.viewport())
+            qp.begin(self)
+            w = 1
+            r = QRect(0, self.height()-w, self.width(), w)
+            qp.fillRect(r, QBrush(QtCore.Qt.red))
+            qp.end()
+        self.update()
+
+
+class IndicatorTextBrowser(QTextBrowser):
+    def __init__(self):
+        super().__init__()
+    def paintEvent(self, ev):
+        super().paintEvent(ev)
+        if self.hasFocus():
+            qp = QPainter(self.viewport())
+            qp.begin(self)
+            w = 1
+            r = QRect(0, self.height()-w, self.width(), w)
+            qp.fillRect(r, QBrush(QtCore.Qt.red))
+            qp.end()
+        self.update()
 
 
 class MainWidget(QFrame):  # QDialog #QMainWindow
@@ -257,7 +288,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         layout.setContentsMargins(5, 0, 5, 0)
         top_controls.setLayout(layout)
 
-        self.list1 = QListWidget(self)
+        self.list1 = IndicatorList()
         self.list1.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.list1.setObjectName("file_list")
         self.list1.itemDoubleClicked.connect(self.file_dclick)
@@ -266,23 +297,20 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         self.list1.currentItemChanged.connect(self.file_selected)
 
-        self.list_parts = QListWidget()
+        self.list_parts = IndicatorList()
         self.list_parts.setObjectName("part_list")
         self.list_parts.model().rowsInserted.connect(self.list_parts_rows_ins)
         self.list_parts.currentItemChanged.connect(self.list_parts_selected)
 
-        self.left_widget = QWidget()
-        left_layout = QVBoxLayout()
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.addWidget(self.list1)
-        self.left_widget.setLayout(left_layout)
-        self.left_widget.setMinimumWidth(30)
-        # left_max_width = self.list1.sizeHintForColumn(0) + self.list1.frameWidth() * 2
+        self.list1.setContentsMargins(0, 0, 0, 0)
+        self.list1.setMinimumWidth(30)
+
         left_max_width = 100
-        self.left_widget.setMaximumWidth(left_max_width)
+        self.list1.setMaximumWidth(left_max_width)
         self.list1.setResizeMode(QListView.Adjust)
 
-        self.view1 = QTextBrowser()
+        # self.view1 = QTextBrowser()
+        self.view1 = IndicatorTextBrowser()
         self.view1.setObjectName("preview")
 
         self.list1.focusInEvent = self.main_focused
@@ -292,7 +320,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.splitter = QSplitter()
         self.splitter.setObjectName("splitter_lists_working")
         self.splitter.setHandleWidth(1)
-        self.splitter.addWidget(self.left_widget)
+        self.splitter.addWidget(self.list1)
         self.splitter.addWidget(self.list_parts)
         self.splitter.addWidget(self.view1)
         self.splitter.setSizes([80, 80, 100])
