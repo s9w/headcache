@@ -6,7 +6,7 @@ from PyQt5.QtGui import QStandardItemModel, QStandardItem
 
 
 class SearchresultWidget(QWidget):
-    def __init__(self, label_text, file_index, part_index, parent=None):
+    def __init__(self, label_text, path, title, parent=None):
         super(SearchresultWidget, self).__init__(parent)
         allLayout = QVBoxLayout()
 
@@ -19,8 +19,8 @@ class SearchresultWidget(QWidget):
         self.setLayout(allLayout)
 
         self.label.setText(label_text)
-        self.file_index = file_index
-        self.part_index = part_index
+        self.filename = path
+        self.part_title = title
 
 
 class Overlay(QWidget):
@@ -51,7 +51,7 @@ class Overlay(QWidget):
 
     def get_selected_indices(self):
         item_widget = self.l1.itemWidget(self.l1.currentItem())
-        return item_widget.file_index, item_widget.part_index
+        return item_widget.filename, item_widget.part_title
 
     def update_visibility(self, other_criteria=True):
         if self.l1.count() > 0 and other_criteria:
@@ -61,8 +61,8 @@ class Overlay(QWidget):
 
     def set_search_results(self, items):
         self.l1.clear()
-        for item_text, file_index, part_index in items:
-            item_widget = SearchresultWidget(item_text, file_index, part_index)  # parent)
+        for item_text, path, title in items:
+            item_widget = SearchresultWidget(item_text, path, title)  # parent)
             item = QListWidgetItem()
             item.setSizeHint(item_widget.sizeHint())
             self.l1.addItem(item)
@@ -82,18 +82,18 @@ class IndexWorker(QThread):
         self.start()
 
     def run(self):
-        for file_index, (filename, topic) in enumerate(sorted(self.data.items(), key=lambda k: k[1]["title"])):
-            for part_index, part in enumerate(topic["content"]):
+        for filename, topic in sorted(self.data.items(), key=lambda k: k[1]["title"]):
+            for part in topic["content"]:
                 self.writer.add_document(
-                    file_index=file_index,
-                    part_index=part_index,
                     title="",
                     _stored_title=part["title"],
-                    content=part["content"]
+                    content=part["content"],
+                    time=topic["time"],
+                    path=filename
                 )
                 self.writer.add_document(
-                    file_index=file_index,
-                    part_index=part_index,
-                    title=part["title"]
+                    title=part["title"],
+                    time=topic["time"],
+                    path=filename
                 )
         self.writer.commit()

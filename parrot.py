@@ -4,23 +4,24 @@ import mistune
 import os
 import os.path
 
+import watchdog.observers
 from PyQt5 import QtCore
 from PyQt5.Qt import QDesktopServices
-from PyQt5.QtCore import QDir, pyqtSignal, QFile, QTimer, QUrl
+from PyQt5.QtCore import QDir, pyqtSignal, QFile, QFileInfo, QTimer, QUrl
 from PyQt5.QtCore import QRect
 from PyQt5.QtCore import QSize
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QAbstractListModel
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
                              QLabel, QVBoxLayout, QSplitter)
 from PyQt5.QtWidgets import QListView, QStyleFactory
-from PyQt5.QtWidgets import QListWidgetItem
-from watchdog.events import LoggingEventHandler
-from watchdog.observers import Observer
+from PyQt5.QtWidgets import QListWidgetItem, QItemDelegate
+from PyQt5.QtGui import QStandardItem, QStandardItemModel
 from whoosh.analysis import StandardAnalyzer, NgramFilter
 from whoosh.fields import *
 from whoosh.index import create_in
 from whoosh.qparser import MultifieldParser
 
+from file_watcher import FileChangeWatcher
 from md_parser import AstBlockParser
 from search import Overlay, IndexWorker
 from ui_components import SearchBar, IndicatorList, IndicatorTextBrowser
@@ -33,7 +34,7 @@ class IdRenderer(mistune.Renderer):
 
 class FileListItemWidget(QWidget):
     def __init__(self, title: str, filename, parent=None):
-        super(FileListItemWidget, self).__init__(parent)
+        super().__init__(parent)
 
         self.real_parent = parent
 
@@ -85,8 +86,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         schema = Schema(
             title=TEXT(stored=True, analyzer=analyzer_typing),
             content=TEXT(stored=True, analyzer=analyzer_typing),
-            file_index=STORED,
-            part_index=STORED,
+            time=STORED,
+            path=ID(stored=True),
             tags=KEYWORD)
         if not os.path.exists("indexdir"):
             os.mkdir("indexdir")
@@ -99,12 +100,62 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         if self.data:
             self.list1.setCurrentRow(0)
+            self.list1.setFocus()
 
         self.overlay = Overlay(self)
         self.overlay.hide()
         self.setObjectName("mainframe")
 
         self.setFocusPolicy(Qt.StrongFocus)
+
+        self.fileWatcher = watchdog.observers.Observer()
+        watcher = FileChangeWatcher()
+        self.fileWatcher.schedule(watcher, path="data", recursive=True)
+        watcher.signal_deleted.connect(self.file_deleted)
+        watcher.signal_modified.connect(self.file_modified)
+        self.fileWatcher.start()
+
+    def file_modified(self, filename):
+        self.data[filename] = self.load_file(filename)
+
+        # update index
+        writer = self.ix.writer()
+        deleted_count = writer.delete_by_term("path", filename)
+
+        topic = self.data[filename]
+        for part in topic["content"]:
+            writer.add_document(
+                title="",
+                _stored_title=part["title"],
+                content=part["content"],
+                time=topic["time"],
+                path=filename
+            )
+            writer.add_document(
+                title=part["title"],
+                time=topic["time"],
+                path=filename
+            )
+        writer.commit()
+        self.searcher = self.ix.searcher()
+
+    def file_deleted(self, filename):
+        # update index
+        writer = self.ix.writer()
+        deleted_count = writer.delete_by_term("path", filename)
+        writer.commit()
+        self.searcher = self.ix.searcher()
+
+        # update internal data
+        del self.data[filename]
+
+        # remove from file list
+        i = -1
+        for i in range(self.list1.count()):
+            item_fn = self.list1.itemWidget(self.list1.item(i)).get_filename()
+            if item_fn == filename:
+                break
+        self.list1.takeItem(self.list1.row(self.list1.item(i)))
 
     def indexing_finished(self):
         self.finder.setEnabled(True)
@@ -132,9 +183,18 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.overlay.hide()
         self.finder.setText("")
 
-        file_index, part_index = self.overlay.get_selected_indices()
-        self.list1.setCurrentRow(file_index)
-        self.list_parts.setCurrentRow(part_index)
+        filename, part_title = self.overlay.get_selected_indices()
+
+        i_filename = -1
+        for i_filename in range(self.list1.count()):
+            item_fn = self.list1.itemWidget(self.list1.item(i_filename)).get_filename()
+            if item_fn == filename:
+                break
+        self.list1.setCurrentRow(i_filename)
+
+        items = self.list_parts.findItems(part_title, Qt.MatchExactly)
+        self.list_parts.setCurrentItem(items[0])
+
         self.view1.setFocus()
 
     @staticmethod
@@ -169,6 +229,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.ast_generator.clear_ast()
         self.ast_generator.parse(mistune.preprocessing(content), filename=filename)
         entry = self.ast_generator.ast
+        entry["time"] = QFileInfo(file).lastModified().toMSecsSinceEpoch()
 
         # add html code to tree nodes
         for i, lvl2 in enumerate(list(entry["content"])):
@@ -178,7 +239,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         return entry
 
     def load_data(self):
-        return {fn: self.load_file(fn) for fn in QDir("data").entryList(["*.md"], QDir.Files)}
+        sorted_files = sorted(QDir("data").entryList(["*.md"], QDir.Files), key=lambda k: k)
+        return {fn: self.load_file(fn) for fn in sorted_files}
 
     def change_file_title(self, title_new):
         filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
@@ -262,8 +324,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     def fill_filename_list(self):
         title_index_dict = {}
         for i, (filename, topic) in enumerate(sorted(self.data.items(), key=lambda k: k[1]["title"])):
-            item_widget = FileListItemWidget(topic["title"], filename, self)
-            item = QListWidgetItem()
+            item = QListWidgetItem(self.list1)
+            item_widget = FileListItemWidget(topic["title"], filename)
             item.setSizeHint(item_widget.sizeHint())
             self.list1.addItem(item)
             self.list1.setItemWidget(item, item_widget)
@@ -324,6 +386,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             self.config["window_size"] = [self.parent().size().width(), self.parent().size().height()]
 
     def closeEvent(self, *args, **kwargs):
+        self.fileWatcher.stop()
+        self.fileWatcher.join()
         self.save_config()
 
     @staticmethod
@@ -364,7 +428,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
                 highl_title = self.highlight_keyword(result["title"], text, len_max=80)
                 html = "<h4>{}</h4>".format(highl_title)
             html_style = "<style>color: red</style>"
-            search_results.append((html_style+html, result["file_index"], result["part_index"]))
+            search_results.append((html_style+html, result["path"], result["title"]))
 
         self.overlay.set_search_results(search_results)
         self.overlay.update_visibility()
@@ -403,9 +467,6 @@ class Example(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    # app.focusChanged.connect(f1)
-    # app = Appp(sys.argv)
-    # app.focusChanged = f1
     ex = Example()
 
     # print("QtGui.QStyleFactory.keys()", QStyleFactory.keys())
@@ -413,11 +474,6 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
-    event_handler = LoggingEventHandler()
-    observer = Observer()
-    observer.schedule(event_handler, path="data", recursive=True)
-    observer.start()
     status = app.exec_()
-    observer.stop()
-    observer.join()
+
     sys.exit(status)
