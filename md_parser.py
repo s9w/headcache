@@ -25,6 +25,9 @@ class AstBlockParser(mistune.BlockLexer):
 
                 getattr(self, 'parse_%s' % key)(m)
 
+                if key != "heading" and "title" not in self.ast:
+                    raise RuntimeError("content without lvl1 heading")
+
                 if key not in ["heading", "newline"] and len(self.ast["content"]) == 0:
                     print("error, content under lvl1 heading")
 
