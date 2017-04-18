@@ -298,6 +298,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         # self.view1 = QTextBrowser()
         self.view1 = IndicatorTextBrowser()
+        self.view1.setOpenExternalLinks(True)
         self.view1.setObjectName("preview")
 
         self.list1.focusInEvent = self.main_focused

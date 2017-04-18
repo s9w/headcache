@@ -24,3 +24,7 @@ tr:nth-child(even){background-color: #353535
 th {
     background-color: #4CAF50;
 }
+
+a{
+    color: #f8f8f2;
+}
