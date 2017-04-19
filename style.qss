@@ -91,6 +91,10 @@ QPushButton{
     color: rgb(150,150,150);
 }
 
+#file_list::item{
+    color: rgba(255,0,0,0);
+}
+
 #match{
     background-color: red;
 }

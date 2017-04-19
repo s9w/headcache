@@ -115,8 +115,30 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         watcher.signal_modified.connect(self.file_modified)
         self.fileWatcher.start()
 
+    def remove_from_file_list(self, filename):
+        found_items = self.list1.findItems(filename, Qt.MatchExactly)
+        if len(found_items) != 1:
+            raise RuntimeError("remove_from_file_list(fn={}}): {} found items".format(filename, len(found_items)))
+        self.list1.takeItem(self.list1.row(found_items[0]))
+
     def file_modified(self, filename):
+        title_old = self.data[filename]["title"]
         self.data[filename] = self.load_file(filename)
+        title_new = self.data[filename]["title"]
+
+        # change title in file list if changed
+        if title_new != title_old:
+            found_items = self.list1.findItems(filename, Qt.MatchExactly)
+            if len(found_items) != 1:
+                raise RuntimeError("file_modified(fn={}}): {} found items".format(filename, len(found_items)))
+            self.list1.itemWidget(found_items[0]).label_title.setText(title_new)
+
+        # update part list if active file was changed
+        if self.list1.currentItem().text() == filename:
+            old_index = self.list_parts.currentRow()
+            self.update_part_list(filename)
+            self.list_parts.setCurrentRow(old_index)
+
 
         # update index
         writer = self.ix.writer()
@@ -239,8 +261,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         return entry
 
     def load_data(self):
-        sorted_files = sorted(QDir("data").entryList(["*.md"], QDir.Files), key=lambda k: k)
-        return {fn: self.load_file(fn) for fn in sorted_files}
+        return {fn: self.load_file(fn) for fn in (QDir("data").entryList(["*.md"], QDir.Files))}
 
     def change_file_title(self, title_new):
         filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
@@ -325,12 +346,13 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     def fill_filename_list(self):
         title_index_dict = {}
         for i, (filename, topic) in enumerate(sorted(self.data.items(), key=lambda k: k[1]["title"])):
-            item = QListWidgetItem(self.list1)
+            item = QListWidgetItem(filename, parent=self.list1)
             item_widget = FileListItemWidget(topic["title"], filename)
             item.setSizeHint(item_widget.sizeHint())
             self.list1.addItem(item)
             self.list1.setItemWidget(item, item_widget)
             title_index_dict[topic["title"]] = i
+        self.list1.sortItems()
         return title_index_dict
 
     def splitter_moved(self, pos, handle_index):
@@ -349,21 +371,18 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         html = self.data[filename]["content"][self.list_parts.currentRow()]["html"]
         self.view1.setHtml(html)
 
+    def update_part_list(self, filename):
+        part_names = [part["title"] for part in self.data[filename]["content"]]
+        self.list_parts.clear()
+        self.list_parts.addItems(part_names)
+        self.list_parts.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+
     def file_selected(self, list_widget_item):
         is_cleared = list_widget_item is None
 
         if not is_cleared:
             filename = self.list1.itemWidget(list_widget_item).get_filename()
-            part_names = [part["title"] for part in self.data[filename]["content"]]
-
-            self.list_parts.clear()
-            self.list_parts.addItems(part_names)
-            # max_width = self.list_parts.sizeHintForColumn(0) + self.list_parts.frameWidth() * 2
-            max_width = 80
-            # self.list_parts.setMaximumWidth(max_width)
-            # self.list_parts.sizehint(max_width)
-            # self.list_parts.setFixedWidth(max_width)
-            self.list_parts.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            self.update_part_list(filename)
 
     def list_parts_rows_ins(self):
         if self.list_parts.count() > 0:
