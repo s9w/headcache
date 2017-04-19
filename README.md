@@ -10,13 +10,13 @@ Install with
  
     pip install headcache
 
-and run it in a directory of your choice with `headcache` from the command line (or an appropriate shortcut). It looks for `.md` files that have one H1 headline, and splits the content of each file in h2 chunks.
+and run it in a directory of your choice with `headcache` from the command line (or an appropriate shortcut). It looks for `.md` files in the working directory that have one h1 headline, and splits the content of each file in h2 chunks.
 
 ![markdown_syntax](doc/syntax.png)
 
-Since text editing is a very personal choice, headcache does not contain a text editor! To add or change your notes, use an external editor. File changes are instantly loaded into the program. A **double click on any file will open it in the default text editor**. Saving will triger an instant update to navigation, preview and the search index.
+Since text editing is a very personal choice, headcache does not contain a text editor! To add or change your notes, use an external editor. File changes are instantly loaded into the program. A **double click on any file will open it in the default text editor**. Saving will trigger an instant update to navigation, preview and the search index.
 
-The escape key can be used to quickly jump to search (and back). All file contents are indexed, searches are instant and a return on any match will jump to the appropriate information.
+The escape key can be used to quickly jump to search (and back). All file contents are indexed, searches are instant and a return key press on any match will jump to the appropriate information.
 
 ![search](doc/search.png)
 
