@@ -1,7 +1,9 @@
 # headcache
-headcache is a note program written in Python(3) and PyQt (5). 
+headcache is a note program written in Python(3) and PyQt (5).
 
-It was designed to have a minimal and intuitive interface, for quick navigation and instant search as well as rendered markdown preview
+It's based on normal markdown files as notes, uses no database or program-specific format and renders the markdown instantly. 
+
+headcache was designed to have a minimal and intuitive interface, for quick navigation and instant search.
 
 ![example](doc/example.png)
 
