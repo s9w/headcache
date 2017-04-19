@@ -278,22 +278,19 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     def load_config():
         config = {
             "window_size": [800, 400],
-            "editor_font": "Source Code Pro",
-            "editor_font_size": 10,
-            "editor_font_size_section": 10,
             "search_title_weight" : 3.0,
             "search_text_weight": 1.0
         }
 
         try:
-            with open('config.json') as data_file:
+            with open('headcache_config.json') as data_file:
                 config.update(json.load(data_file))
         except FileNotFoundError:
             pass
         return config
 
     def save_config(self):
-        with open("config.json", "w") as f:
+        with open("headcache_config.json", "w") as f:
             json.dump(self.config, f, indent=4)
 
     def load_file(self, filename):
