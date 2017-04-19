@@ -74,6 +74,9 @@ class AstBlockParser(mistune.BlockLexer):
                 "title": text,
                 "content": self.get_content(m.group(0))
             })
+        else:
+            self.ast["content"][-1]["content"] += m.group(0)
+
         super().parse_heading(m)
 
     @staticmethod
