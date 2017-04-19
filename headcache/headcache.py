@@ -10,21 +10,20 @@ from PyQt5.Qt import QDesktopServices
 from PyQt5.QtCore import QDir, pyqtSignal, QFile, QFileInfo, QTimer, QUrl
 from PyQt5.QtCore import QRect
 from PyQt5.QtCore import QSize
-from PyQt5.QtCore import Qt, QAbstractListModel
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QFrame,
                              QLabel, QVBoxLayout, QSplitter)
 from PyQt5.QtWidgets import QListView, QStyleFactory
-from PyQt5.QtWidgets import QListWidgetItem, QItemDelegate
-from PyQt5.QtGui import QStandardItem, QStandardItemModel
+from PyQt5.QtWidgets import QListWidgetItem
+from md_parser import AstBlockParser
+from search import Overlay, IndexWorker
+from ui_components import SearchBar, IndicatorList, IndicatorTextBrowser
 from whoosh.analysis import StandardAnalyzer, NgramFilter
 from whoosh.fields import *
 from whoosh.index import create_in
 from whoosh.qparser import MultifieldParser
 
-from file_watcher import FileChangeWatcher
-from md_parser import AstBlockParser
-from search import Overlay, IndexWorker
-from ui_components import SearchBar, IndicatorList, IndicatorTextBrowser
+from headcache.file_watcher import FileChangeWatcher
 
 
 class IdRenderer(mistune.Renderer):
