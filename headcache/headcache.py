@@ -1,6 +1,8 @@
 import json
 import logging
 import mistune
+# import sys
+# sys.path.append("c:/dropbox/headcache")
 import os
 import os.path
 
@@ -15,15 +17,21 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QF
                              QLabel, QVBoxLayout, QSplitter)
 from PyQt5.QtWidgets import QListView, QStyleFactory
 from PyQt5.QtWidgets import QListWidgetItem
-from md_parser import AstBlockParser
-from search import Overlay, IndexWorker
-from ui_components import SearchBar, IndicatorList, IndicatorTextBrowser
+from .md_parser import AstBlockParser
+# from md_parser import AstBlockParser
+from .search import Overlay, IndexWorker
+# from search import Overlay, IndexWorker
+from .ui_components import SearchBar, IndicatorList, IndicatorTextBrowser
+# from ui_components import SearchBar, IndicatorList, IndicatorTextBrowser
 from whoosh.analysis import StandardAnalyzer, NgramFilter
 from whoosh.fields import *
 from whoosh.index import create_in
 from whoosh.qparser import MultifieldParser
 
-from headcache.file_watcher import FileChangeWatcher
+from .file_watcher import FileChangeWatcher
+# from file_watcher import FileChangeWatcher
+import pkg_resources
+
 
 
 class IdRenderer(mistune.Renderer):
@@ -68,7 +76,8 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     def __init__(self, parent):
         super().__init__(parent)
 
-        with open("preview_style.css") as file_style:
+        # with open("preview_style.css") as file_style:
+        with open(pkg_resources.resource_filename("headcache", 'style.qss')) as file_style:
             self.preview_css_str = '<style type="text/css">{}</style>'.format(file_style.read())
 
         # markdown
@@ -109,7 +118,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
 
         self.fileWatcher = watchdog.observers.Observer()
         watcher = FileChangeWatcher()
-        self.fileWatcher.schedule(watcher, path="data", recursive=True)
+        self.fileWatcher.schedule(watcher, path=os.getcwd(), recursive=False)
         watcher.signal_deleted.connect(self.file_deleted)
         watcher.signal_modified.connect(self.file_modified)
         self.fileWatcher.start()
@@ -239,7 +248,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             json.dump(self.config, f, indent=4)
 
     def load_file(self, filename):
-        file = QFile("data/{}".format(filename))
+        file = QFile("{}/{}".format(os.getcwd(), filename))
         if not file.open(QtCore.QIODevice.ReadOnly):
             print("couldn't open file")
         stream = QtCore.QTextStream(file)
@@ -260,7 +269,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         return entry
 
     def load_data(self):
-        return {fn: self.load_file(fn) for fn in (QDir("data").entryList(["*.md"], QDir.Files))}
+        return {fn: self.load_file(fn) for fn in (QDir(os.getcwd()).entryList(["*.md"], QDir.Files))}
 
     def change_file_title(self, title_new):
         filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
@@ -281,7 +290,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         """opens the file with an external editor"""
         current_path = QDir.currentPath()
         filename = self.list1.itemWidget(item).get_filename()
-        QDesktopServices.openUrl(QUrl(u"{}/data/{}".format(current_path, filename)))
+        QDesktopServices.openUrl(QUrl(u"{}/{}".format(current_path, filename)))
 
     def initUI(self):
         allLayout = QVBoxLayout()
@@ -460,7 +469,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
                 self.finder.setFocus()
 
 
-class Example(QMainWindow):
+class MainFrame(QMainWindow):
     def __init__(self):
         super().__init__()
         self.initUI()
@@ -471,12 +480,13 @@ class Example(QMainWindow):
 
         self.statusbar = self.statusBar()
         self.main_widget.msg.connect(self.statusbar.showMessage)
-        with open("style.qss") as file_style:
+        # with open("style.qss") as file_style:
+        with open(pkg_resources.resource_filename("headcache", 'style.qss')) as file_style:
             self.setStyleSheet(file_style.read())
         # self.statusBar().showMessage('Ready')
         self.statusBar().setMaximumHeight(18)
 
-        self.setWindowTitle("Carrie")
+        self.setWindowTitle("headcache")
         self.setStyle(QStyleFactory.create("fusion"))
         self.show()
 
@@ -484,9 +494,10 @@ class Example(QMainWindow):
         self.main_widget.closeEvent(*args, **kwargs)
 
 
-if __name__ == '__main__':
+def main():
+    # print("argv", sys.argv)
     app = QApplication(sys.argv)
-    ex = Example()
+    ex = MainFrame()
 
     # print("QtGui.QStyleFactory.keys()", QStyleFactory.keys())
 
@@ -496,3 +507,7 @@ if __name__ == '__main__':
     status = app.exec_()
 
     sys.exit(status)
+
+
+if __name__ == '__main__':
+    main()
