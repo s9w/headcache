@@ -1,5 +1,11 @@
 import mistune
 
+class BadFormatError(RuntimeError):
+    def __init__(self, filename, text):
+        self.filename = filename
+        self.value = text
+    def __str__(self):
+        return repr("{}, file: {}".format(self.value, self.filename))
 
 class AstBlockParser(mistune.BlockLexer):
     def __init__(self, rules=None, **kwargs):
@@ -26,10 +32,10 @@ class AstBlockParser(mistune.BlockLexer):
                 getattr(self, 'parse_%s' % key)(m)
 
                 if key != "heading" and "title" not in self.ast:
-                    raise RuntimeError("content without lvl1 heading")
+                    raise BadFormatError(filename, "content without lvl1 heading")
 
                 if key not in ["heading", "newline"] and len(self.ast["content"]) == 0:
-                    print("error, content under lvl1 heading")
+                    raise BadFormatError(filename, "content under lvl1 heading")
 
                 # add content to last tree item if it's not a heading (see parse_heading())
                 # or a nested list_rule (prevents double processing list items)

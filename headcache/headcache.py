@@ -3,6 +3,7 @@ import logging
 import mistune
 # import sys
 # sys.path.append("c:/dropbox/headcache")
+# sys.path.append("c:/dropbox/headcache/headcache")
 import os
 import os.path
 
@@ -17,12 +18,16 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QMainWindow, QHBoxLayout, QF
                              QLabel, QVBoxLayout, QSplitter)
 from PyQt5.QtWidgets import QListView, QStyleFactory
 from PyQt5.QtWidgets import QListWidgetItem
-from .md_parser import AstBlockParser
+
+from .md_parser import AstBlockParser, BadFormatError
 # from md_parser import AstBlockParser
+
 from .search import Overlay, IndexWorker
 # from search import Overlay, IndexWorker
+
 from .ui_components import SearchBar, IndicatorList, IndicatorTextBrowser
 # from ui_components import SearchBar, IndicatorList, IndicatorTextBrowser
+
 from whoosh.analysis import StandardAnalyzer, NgramFilter
 from whoosh.fields import *
 from whoosh.index import create_in
@@ -121,6 +126,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.fileWatcher.schedule(watcher, path=os.getcwd(), recursive=False)
         watcher.signal_deleted.connect(self.file_deleted)
         watcher.signal_modified.connect(self.file_modified)
+        watcher.signal_added.connect(self.file_added)
         self.fileWatcher.start()
 
     def remove_from_file_list(self, filename):
@@ -129,9 +135,48 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             raise RuntimeError("remove_from_file_list(fn={}}): {} found items".format(filename, len(found_items)))
         self.list1.takeItem(self.list1.row(found_items[0]))
 
+    def file_added(self, filename):
+        # update data
+        try:
+            self.data[filename] = self.load_file(filename)
+        except BadFormatError as e:
+            print(e)
+            return
+
+        self.add_file_to_list(filename, self.data[filename]["title"])
+        self.list1.sortItems()
+
+        # update index
+        writer = self.ix.writer()
+        topic = self.data[filename]
+        for part in topic["content"]:
+            writer.add_document(
+                title="",
+                _stored_title=part["title"],
+                content=part["content"],
+                time=topic["time"],
+                path=filename
+            )
+            writer.add_document(
+                title=part["title"],
+                time=topic["time"],
+                path=filename
+            )
+        writer.commit()
+        self.searcher = self.ix.searcher()
+
     def file_modified(self, filename):
+        # modified event is sometimes fired twice. prevent trouble
+        if filename not in self.data:
+            return
+
         title_old = self.data[filename]["title"]
-        self.data[filename] = self.load_file(filename)
+        try:
+            self.data[filename] = self.load_file(filename)
+        except BadFormatError as e:
+            print(e)
+            self.file_deleted(filename)
+            return
         title_new = self.data[filename]["title"]
 
         # change title in file list if changed
@@ -269,7 +314,16 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         return entry
 
     def load_data(self):
-        return {fn: self.load_file(fn) for fn in (QDir(os.getcwd()).entryList(["*.md"], QDir.Files))}
+        data = {}
+        for filename in QDir(os.getcwd()).entryList(["*.md"], QDir.Files):
+            try:
+                entry = self.load_file(filename)
+                data[filename] = entry
+            except BadFormatError as e:
+                print(e)
+                continue
+        return data
+        # return {fn: self.load_file(fn) for fn in (QDir(os.getcwd()).entryList(["*.md"], QDir.Files))}
 
     def change_file_title(self, title_new):
         filename = self.list1.itemWidget(self.list1.currentItem()).get_filename()
@@ -351,14 +405,17 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         allLayout.setContentsMargins(0, 5, 0, 0)
         self.setLayout(allLayout)
 
+    def add_file_to_list(self, filename, title):
+        item = QListWidgetItem(filename, parent=self.list1)
+        item_widget = FileListItemWidget(title, filename)
+        item.setSizeHint(item_widget.sizeHint())
+        self.list1.addItem(item)
+        self.list1.setItemWidget(item, item_widget)
+
     def fill_filename_list(self):
         title_index_dict = {}
         for i, (filename, topic) in enumerate(sorted(self.data.items(), key=lambda k: k[1]["title"])):
-            item = QListWidgetItem(filename, parent=self.list1)
-            item_widget = FileListItemWidget(topic["title"], filename)
-            item.setSizeHint(item_widget.sizeHint())
-            self.list1.addItem(item)
-            self.list1.setItemWidget(item, item_widget)
+            self.add_file_to_list(filename, topic["title"])
             title_index_dict[topic["title"]] = i
         self.list1.sortItems()
         return title_index_dict

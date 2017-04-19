@@ -7,6 +7,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 class FileChangeWatcher(FileSystemEventHandler, QThread):
     signal_deleted = pyqtSignal(str)
     signal_modified = pyqtSignal(str)
+    signal_added = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -21,8 +22,9 @@ class FileChangeWatcher(FileSystemEventHandler, QThread):
     def on_created(self, event):
         # super(LoggingEventHandler, self).on_created(event)
 
-        what = 'directory' if event.is_directory else 'file'
-        logging.info("Created %s: %s", what, event.src_path)
+        if not event.is_directory and event.src_path.endswith(".md"):
+            filename = event.src_path.split(u"\\")[-1]
+            self.signal_added.emit(filename)
 
     def on_deleted(self, event):
         if not event.is_directory and event.src_path.endswith(".md"):
