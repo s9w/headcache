@@ -81,8 +81,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     def __init__(self, parent):
         super().__init__(parent)
 
-        # with open("preview_style.css") as file_style:
-        with open(pkg_resources.resource_filename("headcache", 'style.qss')) as file_style:
+        with open(pkg_resources.resource_filename("headcache", 'preview_style.css')) as file_style:
             self.preview_css_str = '<style type="text/css">{}</style>'.format(file_style.read())
 
         # markdown
