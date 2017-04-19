@@ -9,7 +9,7 @@ import os.path
 
 import watchdog.observers
 from PyQt5 import QtCore
-from PyQt5.Qt import QDesktopServices
+from PyQt5.Qt import QDesktopServices, QIcon, QPixmap, QColor
 from PyQt5.QtCore import QDir, pyqtSignal, QFile, QFileInfo, QTimer, QUrl
 from PyQt5.QtCore import QRect
 from PyQt5.QtCore import QSize
@@ -550,6 +550,9 @@ class MainFrame(QMainWindow):
 
         self.setWindowTitle("headcache")
         self.setStyle(QStyleFactory.create("fusion"))
+        pixmap = QPixmap(1,1)
+        pixmap.fill()
+        self.setWindowIcon(QIcon(pixmap))
         self.show()
 
     def closeEvent(self, *args, **kwargs):
