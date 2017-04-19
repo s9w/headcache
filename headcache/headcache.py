@@ -170,9 +170,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
     def file_modified(self, filename):
         # modified event is sometimes fired twice. prevent trouble
         if filename not in self.data:
-            return
-
+            self.file_added(filename)
         title_old = self.data[filename]["title"]
+
         try:
             self.data[filename] = self.load_file(filename)
         except BadFormatError as e:
@@ -182,11 +182,12 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         title_new = self.data[filename]["title"]
 
         # change title in file list if changed
-        if title_new != title_old:
+        if title_old and title_new != title_old:
             found_items = self.list1.findItems(filename, Qt.MatchExactly)
             if len(found_items) != 1:
                 raise RuntimeError("file_modified(fn={}}): {} found items".format(filename, len(found_items)))
             self.list1.itemWidget(found_items[0]).label_title.setText(title_new)
+
 
         # update part list if active file was changed
         if self.list1.currentItem().text() == filename:

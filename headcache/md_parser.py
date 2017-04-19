@@ -60,7 +60,7 @@ class AstBlockParser(mistune.BlockLexer):
         text = m.group(2)
         if level == 1:
             if "title" in self.ast:
-                print("ERROR, second lvl 1 title")
+                raise BadFormatError("", "second level 1 headline")
             self.ast["title"] = text
             self.ast["content"] = []
 
