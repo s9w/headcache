@@ -94,11 +94,13 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.usage_mode = "browse"
         self.initUI()
 
+        self.config = self.load_config()
+
         # setup search index
         analyzer_typing = StandardAnalyzer() | NgramFilter(minsize=2, maxsize=8)
         schema = Schema(
-            title=TEXT(stored=True, analyzer=analyzer_typing),
-            content=TEXT(stored=True, analyzer=analyzer_typing),
+            title=TEXT(stored=True, analyzer=analyzer_typing, field_boost=self.config["search_title_weight"]),
+            content=TEXT(stored=True, analyzer=analyzer_typing, field_boost=self.config["search_text_weight"]),
             time=STORED,
             path=ID(stored=True),
             tags=KEYWORD)
@@ -107,7 +109,7 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
         self.ix = create_in("indexdir", schema)
 
         # setup GUI
-        self.config = self.load_config()
+
         self.old_sizes = self.splitter.sizes()
         self.parent().resize(*self.config["window_size"])
 
@@ -278,7 +280,9 @@ class MainWidget(QFrame):  # QDialog #QMainWindow
             "window_size": [800, 400],
             "editor_font": "Source Code Pro",
             "editor_font_size": 10,
-            "editor_font_size_section": 10
+            "editor_font_size_section": 10,
+            "search_title_weight" : 3.0,
+            "search_text_weight": 1.0
         }
 
         try:
