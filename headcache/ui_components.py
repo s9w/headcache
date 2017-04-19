@@ -49,7 +49,6 @@ class IndicatorList(QListWidget):
         super().paintEvent(ev)
         if self.hasFocus():
             qp = QPainter(self.viewport())
-            qp.begin(self)
             w = 1
             r = QRect(0, self.height()-w, self.width(), w)
             qp.fillRect(r, QBrush(QtCore.Qt.red))
@@ -64,7 +63,6 @@ class IndicatorTextBrowser(QTextBrowser):
         super().paintEvent(ev)
         if self.hasFocus():
             qp = QPainter(self.viewport())
-            qp.begin(self)
             w = 1
             r = QRect(0, self.height()-w, self.width(), w)
             qp.fillRect(r, QBrush(QtCore.Qt.red))
