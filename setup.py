@@ -4,7 +4,6 @@ import headcache
 
 setup(name='headcache',
       version=headcache.__version__,
-      # packages=['headcache'],
       packages=find_packages(),
       package_data={
           'headcache': ['preview_style.css', 'style.qss']
@@ -15,6 +14,7 @@ setup(name='headcache',
               'headcache = headcache.headcache:main',
           ],
       },
+      install_requires=["mistune", "watchdog", "PyQt", "whoosh"],
       author='Sebastian Werhausen',
       author_email="swerhausen@gmail.com",
       url='https://github.com/s9w/headcache',
