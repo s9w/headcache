@@ -15,8 +15,7 @@ class AstBlockParser(mistune.BlockLexer):
     def clear_ast(self):
         self.ast = {}
 
-    def parse(self, text, filename, rules=None):
-        self.filename = filename
+    def parse(self, text, rules=None, filename=None):
         text = text.rstrip('\n')
 
         if not rules:
