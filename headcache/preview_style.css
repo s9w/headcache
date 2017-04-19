@@ -18,7 +18,8 @@ th, td {
     padding: 8px;
 }
 
-tr:nth-child(even){background-color: #353535
+tr:nth-child(even){
+    background-color: #353535
 }
 
 th {

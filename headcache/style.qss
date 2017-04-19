@@ -49,15 +49,11 @@ QPushButton{
     background: red;
 }
 
-#editor{
-    border: 0;
-    /*border-right: 1px dashed gray;*/
-    selection-background-color: #333333;
-}
-
 #preview{
     border: 0;
-    selection-background-color: #333333;
+    selection-background-color: #49483e;
+    color: #f8f8f2;
+    selection-color: #f8f8f2;
 }
 
 #search_result_list{
